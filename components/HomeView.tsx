@@ -62,6 +62,13 @@ export function HomeView({
   const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
   const [tab, setTab] = useState<"map" | "calendar">("map");
 
+  // clubId → name, for the agenda's club line (passed to <Calendar>).
+  const clubNames = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const c of clubs) map[c.id] = c.name;
+    return map;
+  }, [clubs]);
+
   // Cities for the dropdown — union of club cities and item cities.
   const cities = useMemo(() => {
     const set = new Set<string>();
@@ -125,7 +132,7 @@ export function HomeView({
       <div className="min-h-0 flex-1">
         <Calendar
           items={filteredItems}
-          view={tab === "calendar" ? "listMonth" : "dayGridMonth"}
+          clubNames={clubNames}
           hoveredClubId={hoveredClubId}
           selectedClubId={selectedClubId}
           onHover={setHoveredClubId}
@@ -221,31 +228,14 @@ function TabButton({
 }
 
 /**
- * Scoped style overrides for FullCalendar + the hover/select highlight. We
- * cannot edit globals.css, so inject them here (scoped by `.cheer-calendar` and
- * the focus/dim event classes set in Calendar.tsx). Tokens reference the same
- * CSS variables as the rest of the app.
+ * Scoped style overrides for the Leaflet map chrome. We cannot edit globals.css,
+ * so inject them here. Tokens reference the same CSS variables as the rest of
+ * the app. (The agenda list is styled inline via Tailwind in Calendar.tsx and
+ * needs no overrides here.)
  */
 function StyleOverrides() {
   return (
     <style>{`
-      .cheer-calendar { --fc-border-color: var(--border); --fc-page-bg-color: transparent; --fc-neutral-bg-color: var(--surface-2); --fc-today-bg-color: var(--accent-soft); }
-      .cheer-calendar .fc { font-family: var(--font-sans), system-ui, sans-serif; }
-      .cheer-calendar .fc .fc-toolbar-title { font-family: var(--font-display), system-ui, sans-serif; font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); }
-      .cheer-calendar .fc .fc-button { background: var(--surface); border: 1px solid var(--border); color: var(--ink); text-transform: none; font-weight: 600; font-size: 0.78rem; padding: 0.3rem 0.6rem; box-shadow: none; }
-      .cheer-calendar .fc .fc-button:hover { background: var(--surface-2); }
-      .cheer-calendar .fc .fc-button-primary:not(:disabled).fc-button-active,
-      .cheer-calendar .fc .fc-button-primary:not(:disabled):active { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
-      .cheer-calendar .fc .fc-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-      .cheer-calendar .fc .fc-col-header-cell-cushion,
-      .cheer-calendar .fc .fc-daygrid-day-number { color: var(--muted); font-size: 0.75rem; text-decoration: none; }
-      .cheer-calendar .fc .fc-daygrid-day.fc-day-today { background: var(--accent-soft); }
-      .cheer-calendar .fc .fc-event { cursor: pointer; border-radius: 6px; border: none; transition: opacity 0.15s, box-shadow 0.15s, transform 0.15s; }
-      .cheer-calendar .fc .fc-list-event:hover td { background: var(--surface-2); }
-      .cheer-calendar .fc-event.cheer-event-dim { opacity: 0.28; }
-      .cheer-calendar .fc-event.cheer-event-focus { box-shadow: 0 0 0 2px var(--accent); transform: translateY(-1px); z-index: 5; }
-      .cheer-calendar .fc .fc-list-empty,
-      .cheer-calendar .fc .fc-daygrid-body { background: transparent; }
       /* Leaflet popup chrome → match app surfaces. */
       .leaflet-popup-content-wrapper { border-radius: var(--radius); box-shadow: var(--shadow-md); }
       .leaflet-popup-content { margin: 0.6rem 0.75rem; }

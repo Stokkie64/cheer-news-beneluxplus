@@ -1,170 +1,246 @@
 "use client";
 
 /**
- * Calendar / agenda (Client Component) built on FullCalendar.
+ * Agenda (Client Component) — a custom, date-grouped list.
  *
- * - Desktop renders `dayGridMonth`; mobile renders `listMonth` (set via the
- *   `view` prop from HomeView, which knows the breakpoint).
- * - Each `CalendarItem` becomes a FullCalendar event colored by
- *   EVENT_TYPE_COLOR. Open-gym occurrences and one-off events share the model.
- * - Click → open the item's url (event page) or navigate to the club profile.
+ * Replaces the former FullCalendar month grid, which was large and low-density
+ * for a dataset that is mostly sparse one-offs plus many recurring open gyms.
+ * Instead we render a tight, scannable list grouped by date ("Vandaag",
+ * "Morgen", "ma 16 jun"). Each row shows, at a glance and with no clicking:
+ *   - a type color dot + NL type label (EVENT_TYPE_LABEL / EVENT_TYPE_COLOR)
+ *   - the time / duration (or "Hele dag", or a multi-day range)
+ *   - the title
+ *   - the club name
+ *   - the location / city
  *
- * Hover/select sync: every event carries its `clubId` in extendedProps. When a
- * club is focused elsewhere (map pin), events of other clubs dim and the
- * focused club's events get an accent ring. Hovering an event reports its club
- * back up via `onHover` so the map can highlight the matching pin.
+ * Open-gym occurrences for the same club on the same day are condensed into one
+ * row (with an "×N" count) so the handful of one-off events stay prominent.
+ *
+ * Hover/select sync (unchanged contract): each row reports its `clubId` via
+ * `onHover` on mouse enter; when a club is focused (here or via a map pin), its
+ * rows get an accent ring and the others dim. Clicking a row promotes to a
+ * sticky selection (`onSelect`) and, if the item has a url, navigates
+ * (internal → router push, external → new tab).
+ *
+ * Props are unchanged except `view` is dropped (no longer needed — the same
+ * list serves the desktop right pane and the mobile "Agenda" tab) and an
+ * optional `clubNames` map is accepted to render a clean club line.
  */
 import { useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import FullCalendar from "@fullcalendar/react";
-import dayGridPlugin from "@fullcalendar/daygrid";
-import listPlugin from "@fullcalendar/list";
-import type { EventClickArg, EventContentArg } from "@fullcalendar/core";
+import { Clock, MapPin, CalendarDays } from "lucide-react";
 import { EVENT_TYPE_COLOR, EVENT_TYPE_LABEL } from "@/lib/eventColors";
 import { cn } from "@/lib/utils";
 import type { CalendarItem } from "@/components/home/types";
+import { buildAgenda, type AgendaRow } from "@/components/home/agenda";
 
 interface CalendarProps {
   items: CalendarItem[];
-  view: "dayGridMonth" | "listMonth";
   hoveredClubId: string | null;
   selectedClubId: string | null;
   onHover: (id: string | null) => void;
   onSelect: (id: string | null) => void;
+  /** clubId → display name, for the club line (events may not embed it). */
+  clubNames?: Record<string, string>;
 }
 
 /**
- * Compute the FullCalendar `end` for a CalendarItem.
- *
- * - Timed events: pass `endsAt` through as-is (literal end instant).
- * - All-day events with an `endsAt` on a LATER date: FullCalendar uses `end`
- *   exclusively for all-day events, so we pass the day AFTER the last day
- *   (last day + 1) so the block spans inclusively across all its days.
- * - All-day events with no `endsAt` (or same-day end): omit `end` → a single
- *   all-day block on the start date.
+ * Display title for a row. Open-gym titles are generated as "Open gym · Club";
+ * since we render the type label and club name separately, strip that prefix to
+ * a plain "Open gym" so the title column isn't redundant.
  */
-function allDayEnd(item: CalendarItem): string | undefined {
-  if (!item.allDay) return item.endsAt ?? undefined;
-  if (!item.endsAt) return undefined;
-  const startDay = item.startsAt.slice(0, 10);
-  const endDay = item.endsAt.slice(0, 10);
-  if (endDay <= startDay) return undefined; // single all-day block
-  // Exclusive end = last day + 1.
-  const next = new Date(`${endDay}T00:00:00Z`);
-  next.setUTCDate(next.getUTCDate() + 1);
-  return next.toISOString().slice(0, 10);
+function displayTitle(item: CalendarItem): string {
+  if (item.isOpenGym) return EVENT_TYPE_LABEL.open_gym;
+  return item.title;
 }
 
 export function Calendar({
   items,
-  view,
   hoveredClubId,
   selectedClubId,
   onHover,
   onSelect,
+  clubNames,
 }: CalendarProps) {
   const router = useRouter();
-  const calendarRef = useRef<FullCalendar>(null);
+  // Single "now" per mount so "Vandaag"/"Morgen" headers are stable across renders.
+  const nowRef = useRef(new Date());
 
-  const events = useMemo(
-    () =>
-      items.map((item) => ({
-        id: item.id,
-        title: item.title,
-        start: item.startsAt,
-        // FullCalendar treats `end` as EXCLUSIVE for all-day events. For a
-        // multi-day all-day event we must therefore pass the day AFTER the last
-        // day so it spans correctly; for timed events `end` is the literal
-        // instant. All-day events with no end get no `end` (single-day block).
-        end: allDayEnd(item),
-        allDay: item.allDay,
-        backgroundColor: EVENT_TYPE_COLOR[item.type],
-        borderColor: EVENT_TYPE_COLOR[item.type],
-        textColor: "#ffffff",
-        extendedProps: {
-          clubId: item.clubId,
-          url: item.url,
-          type: item.type,
-          locationText: item.locationText,
-          isOpenGym: item.isOpenGym,
-        },
-      })),
+  const groups = useMemo(
+    () => buildAgenda(items, nowRef.current),
     [items],
   );
 
   const focusId = selectedClubId ?? hoveredClubId;
 
-  function handleClick(arg: EventClickArg) {
-    arg.jsEvent.preventDefault();
-    const clubId = arg.event.extendedProps.clubId as string | null;
-    const url = arg.event.extendedProps.url as string | null;
-    if (clubId) onSelect(clubId);
-    if (url) {
-      if (url.startsWith("/")) router.push(url);
-      else window.open(url, "_blank", "noopener,noreferrer");
+  function navigate(item: CalendarItem) {
+    if (item.clubId) onSelect(item.clubId);
+    if (item.url) {
+      if (item.url.startsWith("/")) router.push(item.url);
+      else window.open(item.url, "_blank", "noopener,noreferrer");
     }
   }
 
-  // Per-event styling driven by the focused club.
-  function eventClassNames(arg: { event: { extendedProps: Record<string, unknown> } }) {
-    if (!focusId) return [];
-    const clubId = arg.event.extendedProps.clubId as string | null;
-    return clubId === focusId ? ["cheer-event-focus"] : ["cheer-event-dim"];
-  }
-
-  function renderEventContent(arg: EventContentArg) {
-    const type = arg.event.extendedProps.type as keyof typeof EVENT_TYPE_LABEL;
-    const location = arg.event.extendedProps.locationText as string | null;
-    const isList = arg.view.type.startsWith("list");
-    if (isList) {
-      return (
-        <div className="flex flex-col">
-          <span className="font-medium">{arg.event.title}</span>
-          <span className="text-xs opacity-70">
-            {EVENT_TYPE_LABEL[type]}
-            {location ? ` · ${location}` : ""}
-          </span>
-        </div>
-      );
-    }
+  if (groups.length === 0) {
     return (
-      <div className="truncate px-1 text-xs font-medium" title={arg.event.title}>
-        {arg.timeText && <span className="mr-1 opacity-80">{arg.timeText}</span>}
-        {arg.event.title}
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+        <span className="flex size-12 items-center justify-center rounded-full border border-dashed border-[var(--border)] bg-[var(--surface-2)] text-[var(--muted)]">
+          <CalendarDays className="size-5" aria-hidden />
+        </span>
+        <p className="font-display text-sm font-semibold text-[var(--ink)]">
+          Geen evenementen
+        </p>
+        <p className="max-w-xs text-xs text-[var(--muted)]">
+          Geen evenementen in deze periode of met deze filters.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className={cn("cheer-calendar h-full overflow-auto p-3")}>
-      <FullCalendar
-        ref={calendarRef}
-        plugins={[dayGridPlugin, listPlugin]}
-        initialView={view}
-        // Re-init when the breakpoint flips desktop⇄mobile.
-        key={view}
-        headerToolbar={{
-          left: "prev,next today",
-          center: "title",
-          right: "",
-        }}
-        locale="nl"
-        firstDay={1}
-        height="100%"
-        events={events}
-        eventClick={handleClick}
-        eventClassNames={eventClassNames}
-        eventContent={renderEventContent}
-        eventMouseEnter={(arg) =>
-          onHover(arg.event.extendedProps.clubId as string | null)
-        }
-        eventMouseLeave={() => onHover(null)}
-        noEventsContent="Geen evenementen in deze periode"
-        dayMaxEvents={3}
-        buttonText={{ today: "Vandaag", month: "Maand", list: "Lijst" }}
-        displayEventTime
-        eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
-      />
+    <div className="h-full overflow-y-auto">
+      <ul className="divide-y divide-[var(--border)]">
+        {groups.map((group) => (
+          <li key={group.dayKey}>
+            {/* Sticky date separator */}
+            <h3 className="sticky top-0 z-10 flex items-baseline gap-2 border-b border-[var(--border)] bg-[var(--surface-2)]/95 px-4 py-1.5 backdrop-blur">
+              <span className="font-display text-xs font-bold uppercase tracking-wide text-[var(--ink)]">
+                {group.label}
+              </span>
+              <span className="text-[0.7rem] tabular-nums text-[var(--muted)]">
+                {group.rows.length}
+              </span>
+            </h3>
+            <ul>
+              {group.rows.map((row) => (
+                <AgendaRowItem
+                  key={row.key}
+                  row={row}
+                  focusId={focusId}
+                  clubNames={clubNames}
+                  onHover={onHover}
+                  onActivate={navigate}
+                />
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ul>
     </div>
   );
+}
+
+function AgendaRowItem({
+  row,
+  focusId,
+  clubNames,
+  onHover,
+  onActivate,
+}: {
+  row: AgendaRow;
+  focusId: string | null;
+  clubNames?: Record<string, string>;
+  onHover: (id: string | null) => void;
+  onActivate: (item: CalendarItem) => void;
+}) {
+  const { item } = row;
+  const color = EVENT_TYPE_COLOR[item.type];
+  const dimmed = focusId != null && item.clubId !== focusId;
+  const focused = focusId != null && item.clubId === focusId;
+
+  const clubName =
+    (item.clubId && clubNames?.[item.clubId]) ||
+    (item.isOpenGym ? clubNameFromTitle(item.title) : null);
+
+  const interactive = Boolean(item.url || item.clubId);
+
+  return (
+    <li
+      onMouseEnter={() => onHover(item.clubId)}
+      onMouseLeave={() => onHover(null)}
+      onClick={interactive ? () => onActivate(item) : undefined}
+      onKeyDown={
+        interactive
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onActivate(item);
+              }
+            }
+          : undefined
+      }
+      tabIndex={interactive ? 0 : undefined}
+      role={interactive ? "button" : undefined}
+      aria-label={interactive ? `${displayTitle(item)} — meer info` : undefined}
+      className={cn(
+        "flex items-start gap-3 px-4 py-2.5 transition-colors",
+        interactive && "cursor-pointer hover:bg-[var(--surface-2)]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]",
+        dimmed && "opacity-40",
+        focused && "bg-[var(--accent-soft)]",
+      )}
+    >
+      {/* Type color marker */}
+      <span
+        aria-hidden
+        className="mt-1 size-2.5 shrink-0 rounded-full"
+        style={{ backgroundColor: color }}
+      />
+
+      {/* Time / duration column */}
+      <span className="mt-px flex w-[5.5rem] shrink-0 items-center gap-1 text-xs font-semibold tabular-nums text-[var(--ink)]">
+        <Clock className="size-3 shrink-0 text-[var(--muted)]" aria-hidden />
+        <span className="truncate">{row.timeLabel}</span>
+      </span>
+
+      {/* Main content */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2">
+          <span className="truncate text-sm font-semibold text-[var(--ink)]">
+            {displayTitle(item)}
+          </span>
+          {row.count > 1 && (
+            <span className="shrink-0 rounded-full bg-[var(--surface-2)] px-1.5 text-[0.65rem] font-semibold tabular-nums text-[var(--muted)]">
+              {row.count}×
+            </span>
+          )}
+        </div>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--muted)]">
+          <span
+            className="font-medium"
+            style={{ color }}
+          >
+            {EVENT_TYPE_LABEL[item.type]}
+          </span>
+          {clubName && (
+            <>
+              <span aria-hidden className="text-[var(--border)]">
+                ·
+              </span>
+              <span className="truncate text-[var(--ink)]">{clubName}</span>
+            </>
+          )}
+          {item.locationText && (
+            <>
+              <span aria-hidden className="text-[var(--border)]">
+                ·
+              </span>
+              <span className="inline-flex min-w-0 items-center gap-0.5">
+                <MapPin className="size-3 shrink-0" aria-hidden />
+                <span className="truncate">{item.locationText}</span>
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+    </li>
+  );
+}
+
+/** Recover the club name from a generated open-gym title ("Open gym · Club"). */
+function clubNameFromTitle(title: string): string | null {
+  const idx = title.indexOf("·");
+  if (idx === -1) return null;
+  const name = title.slice(idx + 1).trim();
+  return name || null;
 }
