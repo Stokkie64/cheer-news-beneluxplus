@@ -49,7 +49,7 @@ env:
     availability:
       - RUNTIME
   - variable: ADMIN_EMAILS
-    value: jesse@adapta.nl,wonnink.jesse@gmail.com
+    value: wonnink.jesse@gmail.com
     availability:
       - RUNTIME
   # Server-only secrets (create with: firebase apphosting:secrets:set <name>).

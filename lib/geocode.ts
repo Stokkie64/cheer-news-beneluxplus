@@ -10,7 +10,7 @@
  */
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
-const USER_AGENT = "CheerNewsBeneluxPlus/1.0 (contact: jesse@adapta.nl)";
+const USER_AGENT = "CheerNewsBeneluxPlus/1.0 (contact: wonnink.jesse@gmail.com)";
 const MIN_INTERVAL_MS = 1100; // > 1s to stay safely under the rate limit.
 
 export interface GeoResult {
