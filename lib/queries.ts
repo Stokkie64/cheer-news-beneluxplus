@@ -11,6 +11,7 @@ import type {
   EventClient,
   OpenGymClient,
   SubmissionClient,
+  Team,
 } from "@/lib/types";
 
 export const COLLECTIONS = {
@@ -60,6 +61,16 @@ export async function getClubBySlug(slug: string): Promise<ClubClient | null> {
     .get();
   if (snap.empty) return null;
   return docToClient<ClubClient>(snap.docs[0]);
+}
+
+/** Full team list from the club's `teams` subcollection. */
+export async function getClubTeams(clubId: string): Promise<Team[]> {
+  const snap = await adminDb
+    .collection(COLLECTIONS.clubs)
+    .doc(clubId)
+    .collection(COLLECTIONS.teams)
+    .get();
+  return snap.docs.map((d) => docToClient<Team>(d));
 }
 
 // ---- Events ----
