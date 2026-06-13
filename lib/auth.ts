@@ -40,6 +40,25 @@ export async function verifyAdmin(idToken: string | undefined): Promise<AdminUse
   }
 }
 
+/**
+ * Verify a Firebase ID token WITHOUT requiring the admin allowlist.
+ *
+ * Used to gate public submissions: any signed-in Google account is acceptable
+ * (this is accountability / anti-spam, not authorization). Returns the user on
+ * success, or null on any failure (missing/invalid token).
+ */
+export async function verifyUser(
+  idToken: string | undefined,
+): Promise<{ uid: string; email: string | null } | null> {
+  if (!idToken) return null;
+  try {
+    const decoded = await adminAuth.verifyIdToken(idToken);
+    return { uid: decoded.uid, email: decoded.email ?? null };
+  } catch {
+    return null;
+  }
+}
+
 /** Extract a bearer token from an Authorization header value. */
 export function bearerToken(authHeader: string | null | undefined): string | undefined {
   if (!authHeader) return undefined;

@@ -3,17 +3,30 @@
 /**
  * Public submission form (Client Component).
  *
+ * - Requires Google sign-in (any account): submitting is gated for
+ *   accountability / anti-spam. When signed out we show a sign-in button; when
+ *   signed in we show the form plus the user's email and a sign-out link, and
+ *   send the Firebase ID token as `Authorization: Bearer <token>`.
  * - Kind picker (event / gym / club / correction) toggles the field set.
  * - Hidden honeypot input (`website_url2`) — bots fill it; humans never see it.
- * - Turnstile widget rendered ONLY when a site key is provided; without one
- *   (dev), the form submits with no token and the server skips verification.
+ * - Turnstile widget rendered ONLY when a site key is provided; it's now
+ *   redundant with the login gate but left in place. The server skips it when a
+ *   valid login is present.
  * - Submits JSON to /api/submit and surfaces success + per-field/global errors.
  *
  * Validation contract is shared with the server via lib/submitSchema.ts.
  */
 import * as React from "react";
 import { Turnstile } from "@marsidev/react-turnstile";
-import { CheckCircle2, Loader2, Send } from "lucide-react";
+import {
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+  type User,
+} from "firebase/auth";
+import { CheckCircle2, Loader2, LogIn, Send } from "lucide-react";
+import { clientAuth } from "@/lib/firebase";
 import { Button } from "@/components/ui/Button";
 import { SUBMISSION_KIND_LABEL, type SubmissionInput } from "@/lib/submitSchema";
 import { EVENT_TYPE_LABEL } from "@/lib/eventColors";
@@ -46,6 +59,32 @@ interface SubmitFormProps {
 }
 
 export function SubmitForm({ turnstileSiteKey }: SubmitFormProps) {
+  const [user, setUser] = React.useState<User | null>(null);
+  const [authReady, setAuthReady] = React.useState(false);
+  const [signInBusy, setSignInBusy] = React.useState(false);
+  const [signInError, setSignInError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const unsub = onAuthStateChanged(clientAuth, (u) => {
+      setUser(u);
+      setAuthReady(true);
+    });
+    return () => unsub();
+  }, []);
+
+  async function handleSignIn() {
+    setSignInBusy(true);
+    setSignInError(null);
+    try {
+      await signInWithPopup(clientAuth, new GoogleAuthProvider());
+    } catch (err) {
+      console.error("[submit] Google sign-in failed:", err);
+      setSignInError("Inloggen met Google is mislukt. Probeer het opnieuw.");
+    } finally {
+      setSignInBusy(false);
+    }
+  }
+
   const [kind, setKind] = React.useState<SubmissionKind>("event");
   // Single flat field bag keyed by field name; per-kind subset is read on submit.
   const [values, setValues] = React.useState<Record<string, string>>({});
@@ -128,9 +167,18 @@ export function SubmitForm({ turnstileSiteKey }: SubmitFormProps) {
     setGlobalError(null);
 
     try {
+      if (!user) {
+        setStatus("idle");
+        setGlobalError("Log in met Google om een evenement te melden.");
+        return;
+      }
+      const idToken = await user.getIdToken();
       const res = await fetch("/api/submit", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${idToken}`,
+        },
         body: JSON.stringify({
           payload: buildPayload(),
           website_url2: honeypot,
@@ -155,6 +203,39 @@ export function SubmitForm({ turnstileSiteKey }: SubmitFormProps) {
       setStatus("idle");
       setGlobalError("Kon de inzending niet versturen. Controleer je verbinding.");
     }
+  }
+
+  if (!authReady) {
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="size-6 animate-spin text-[var(--muted)]" aria-hidden />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex flex-col items-start gap-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-6">
+        <p className="text-sm text-[var(--muted)]">
+          Om spam tegen te gaan vragen we je om in te loggen voordat je iets
+          inzendt. Je gegevens worden alleen gebruikt om je inzending te
+          verifiëren.
+        </p>
+        {signInError && (
+          <p className="rounded-[var(--radius)] border border-[var(--accent)] bg-[var(--accent-soft)] px-3 py-2 text-sm text-[var(--ink)]">
+            {signInError}
+          </p>
+        )}
+        <Button size="lg" onClick={handleSignIn} disabled={signInBusy}>
+          {signInBusy ? (
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+          ) : (
+            <LogIn className="size-4" aria-hidden />
+          )}
+          Inloggen met Google om een evenement te melden
+        </Button>
+      </div>
+    );
   }
 
   if (status === "success") {
@@ -186,6 +267,20 @@ export function SubmitForm({ turnstileSiteKey }: SubmitFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6" noValidate>
+      {/* Signed-in banner */}
+      <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
+        <span>
+          Ingelogd als <span className="font-medium text-[var(--ink)]">{user.email}</span>
+        </span>
+        <button
+          type="button"
+          onClick={() => signOut(clientAuth)}
+          className="ml-auto underline underline-offset-2 hover:text-[var(--ink)]"
+        >
+          Uitloggen
+        </button>
+      </div>
+
       {/* Kind picker */}
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1 text-sm font-medium text-[var(--ink)]">

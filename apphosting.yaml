@@ -52,10 +52,21 @@ env:
     value: wonnink.jesse@gmail.com
     availability:
       - RUNTIME
+  # Gmail address used to send maintainer notification emails (not a secret).
+  - variable: GMAIL_USER
+    value: wonnink.jesse@gmail.com
+    availability:
+      - RUNTIME
   # Server-only secrets (create with: firebase apphosting:secrets:set <name>).
   # Turnstile is optional — the submission form degrades gracefully without it.
   # Add TURNSTILE_SECRET_KEY / NEXT_PUBLIC_TURNSTILE_SITE_KEY here once configured.
   - variable: GEMINI_API_KEY
     secret: gemini-api-key
+    availability:
+      - RUNTIME
+  # Gmail app password for submission notifications (requires 2FA on the account).
+  # Create with: firebase apphosting:secrets:set gmail-app-password
+  - variable: GMAIL_APP_PASSWORD
+    secret: gmail-app-password
     availability:
       - RUNTIME

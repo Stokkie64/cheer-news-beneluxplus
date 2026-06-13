@@ -1,17 +1,20 @@
 /**
  * Admin review queue (Client page).
  *
- * Firebase Auth (email/password) gates access. After sign-in we take the user's
+ * Firebase Auth (Google sign-in) gates access. After sign-in we take the user's
  * ID token and call /api/admin/review with `Authorization: Bearer <token>`;
  * the server re-verifies the token AND checks the email allowlist, so the
- * client gate is convenience only — the server is the real boundary.
+ * client gate is convenience only — the server is the real boundary. A
+ * non-allowlisted Google account signs in fine but the API returns 401, which
+ * the queue renders as "Geen toegang".
  */
 "use client";
 
 import * as React from "react";
 import {
+  GoogleAuthProvider,
   onAuthStateChanged,
-  signInWithEmailAndPassword,
+  signInWithPopup,
   signOut,
   type User,
 } from "firebase/auth";
@@ -43,7 +46,7 @@ export default function AdminPage() {
   if (!user) {
     return (
       <main className="mx-auto w-full max-w-sm px-4 py-16">
-        <SignInForm />
+        <SignIn />
       </main>
     );
   }
@@ -66,75 +69,40 @@ export default function AdminPage() {
   );
 }
 
-function SignInForm() {
-  const [email, setEmail] = React.useState("");
-  const [password, setPassword] = React.useState("");
+function SignIn() {
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleGoogle() {
     setBusy(true);
     setError(null);
     try {
-      await signInWithEmailAndPassword(clientAuth, email.trim(), password);
+      await signInWithPopup(clientAuth, new GoogleAuthProvider());
     } catch (err) {
-      // Don't leak which factor was wrong; also covers "auth not configured".
-      console.error("[admin] sign-in failed:", err);
-      setError("Inloggen mislukt. Controleer je e-mailadres en wachtwoord.");
+      console.error("[admin] Google sign-in failed:", err);
+      setError("Inloggen met Google is mislukt. Probeer het opnieuw.");
     } finally {
       setBusy(false);
     }
   }
 
-  const inputClass =
-    "h-11 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]";
-
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight">Beheer</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Log in om inzendingen te beoordelen.
+          Log in met Google om inzendingen te beoordelen.
         </p>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="email" className="text-sm font-medium">
-          E-mailadres
-        </label>
-        <input
-          id="email"
-          type="email"
-          autoComplete="username"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className={inputClass}
-          required
-        />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="password" className="text-sm font-medium">
-          Wachtwoord
-        </label>
-        <input
-          id="password"
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className={inputClass}
-          required
-        />
       </div>
       {error && (
         <p className="rounded-[var(--radius)] border border-[var(--accent)] bg-[var(--accent-soft)] px-3 py-2 text-sm">
           {error}
         </p>
       )}
-      <Button type="submit" size="lg" disabled={busy}>
+      <Button size="lg" onClick={handleGoogle} disabled={busy}>
         {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-        Inloggen
+        Inloggen met Google
       </Button>
-    </form>
+    </div>
   );
 }

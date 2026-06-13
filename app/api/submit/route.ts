@@ -18,6 +18,8 @@ import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { COLLECTIONS } from "@/lib/queries";
 import { submissionInputSchema } from "@/lib/submitSchema";
+import { bearerToken, verifyUser } from "@/lib/auth";
+import { sendSubmissionNotification } from "@/lib/mailer";
 
 export const runtime = "nodejs";
 
@@ -89,6 +91,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  // 2b. Require a valid Firebase login (any Google account). This is the new
+  //     anti-spam / accountability gate; Turnstile below is now redundant but
+  //     left in place. The allowlist is NOT checked here — anyone signed in may
+  //     submit; maintainers review before anything is published.
+  const user = await verifyUser(bearerToken(req.headers.get("authorization")));
+  if (!user) {
+    return NextResponse.json(
+      { ok: false, error: "Log in om een evenement te melden." },
+      { status: 401 },
+    );
+  }
+
   const ip = clientIp(req);
 
   // 5. Rate limit (before doing expensive work / writes).
@@ -131,8 +145,23 @@ export async function POST(req: Request) {
       createdEntityId: null,
       reviewedBy: null,
       ipHash: hashIp(ip),
+      submittedByEmail: user.email,
+      submittedByUid: user.uid,
       createdAt: FieldValue.serverTimestamp(),
     });
+
+    // Notify maintainers. Never let a mail failure fail the request.
+    try {
+      await sendSubmissionNotification({
+        kind,
+        payload,
+        submittedByEmail: user.email,
+        id: ref.id,
+      });
+    } catch (mailErr) {
+      console.error("[api/submit] notification failed:", mailErr);
+    }
+
     return NextResponse.json({ ok: true, id: ref.id });
   } catch (err) {
     console.error("[api/submit] write failed:", err);

@@ -116,9 +116,12 @@ export function ReviewQueue({ user }: ReviewQueueProps) {
   if (state.phase === "forbidden") {
     return (
       <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-8 text-center">
-        <p className="font-display text-lg font-semibold">Geen toegang</p>
+        <p className="font-display text-lg font-semibold">
+          Geen toegang met dit account
+        </p>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Dit account is geen beheerder.
+          Dit Google-account is geen beheerder. Log uit en probeer een ander
+          account.
         </p>
       </div>
     );
