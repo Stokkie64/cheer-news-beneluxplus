@@ -3,15 +3,28 @@
 /**
  * Leaflet map of club pins (Client Component).
  *
- * MUST be loaded via `dynamic(..., { ssr: false })` because Leaflet touches
- * `window` at import time. We avoid Leaflet's broken default icon URLs (they
- * 404 under a bundler) by building markers from inline SVG `divIcon`s, which
- * also lets us tint the selected/hovered pin with the spirit accent.
+ * MUST be loaded via `dynamic(..., { ssr: false })` because Leaflet (and
+ * leaflet.markercluster, which it pulls in) touch `window` at import time. We
+ * avoid Leaflet's broken default icon URLs (they 404 under a bundler) by
+ * building markers from inline SVG `divIcon`s, which also lets us tint the
+ * selected/hovered pin with the spirit accent.
+ *
+ * STACKED PINS — clustering + spiderfy:
+ *   Many clubs are geocoded to their city centre, so several share *identical*
+ *   coordinates and their pins would stack exactly on top of one another. We
+ *   wrap every marker in a `<MarkerClusterGroup>` (leaflet.markercluster):
+ *     - Nearby pins collapse into a themed count badge.
+ *     - Clicking a cluster zooms toward its members.
+ *     - Members at the *same* coordinate cannot be separated by zoom, so the
+ *       group spiderfies them (fans them out on a ring) on click — every pin
+ *       then becomes individually hoverable/clickable with its own tooltip and
+ *       popup.
  *
  * Hover/select sync: hovering a pin calls `onHover`, clicking selects via
  * `onSelect`; the externally-controlled `hoveredClubId`/`selectedClubId` props
- * restyle the matching marker and pan the map to a club highlighted elsewhere
- * (e.g. from the agenda).
+ * restyle the matching marker. When a club is highlighted from elsewhere (e.g.
+ * the agenda) we ask the cluster group to reveal it (`zoomToShowLayer`, which
+ * zooms/spiderfies as needed) so a buried pin surfaces and shows its highlight.
  */
 import { useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
@@ -23,18 +36,21 @@ import {
   Tooltip,
   useMap,
 } from "react-leaflet";
+import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
 import { Globe, AtSign, Share2, Music2, MapPin, ArrowRight } from "lucide-react";
 import "leaflet/dist/leaflet.css";
+import "react-leaflet-cluster/dist/assets/MarkerCluster.css";
+import "react-leaflet-cluster/dist/assets/MarkerCluster.Default.css";
 import type { MapClub } from "@/components/home/types";
 
 const NL_CENTER: [number, number] = [52.2, 5.3];
 const NL_ZOOM = 7;
 
 /**
- * Theme Leaflet's tooltip/popup chrome with our design tokens. Injected once
- * (scoped by the `cheer-` class names we set on each Tooltip/Popup) so the
- * default white-box Leaflet styling doesn't clash with the surface/ink palette.
+ * Theme Leaflet's tooltip/popup/cluster chrome with our design tokens. Injected
+ * once (scoped by the `cheer-` class names we set) so the default white-box
+ * Leaflet styling doesn't clash with the surface/ink palette.
  */
 const MAP_THEME_CSS = `
   .cheer-tooltip.leaflet-tooltip {
@@ -66,6 +82,31 @@ const MAP_THEME_CSS = `
   }
   /* Neutralize Leaflet's directional tooltip arrow (we omit it for clarity). */
   .cheer-tooltip.leaflet-tooltip::before { display: none; }
+
+  /* ---- Cluster badge: themed count bubble (replaces the default blue). ---- */
+  .cheer-cluster {
+    background: transparent;
+    border: none;
+  }
+  .cheer-cluster-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    border-radius: 9999px;
+    background: var(--accent);
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 13px;
+    line-height: 1;
+    border: 2px solid #ffffff;
+    box-shadow: 0 1px 4px rgb(23 22 27 / 0.35);
+  }
+  /* A faint accent halo so dense clusters read as "more". */
+  .cheer-cluster-badge--lg { font-size: 14px; }
+  .leaflet-cluster-anim .leaflet-marker-icon,
+  .leaflet-cluster-anim .leaflet-marker-shadow { transition: transform 0.25s ease-out, opacity 0.25s ease-in; }
 `;
 
 /** Build a teardrop pin as an inline-SVG divIcon, tinted by state. */
@@ -93,21 +134,59 @@ function pinIcon(state: "default" | "hover" | "selected"): L.DivIcon {
   });
 }
 
-/** Imperatively pans to a club selected/hovered from outside the map. */
-function PanToHighlight({
+/**
+ * Themed cluster icon: an accent count bubble that grows slightly with the
+ * number of children, so a "37" cluster reads heavier than a "3".
+ */
+function clusterIcon(cluster: L.MarkerCluster): L.DivIcon {
+  const count = cluster.getChildCount();
+  // Size scales gently with count (clamped) for legibility at any density.
+  const size = count < 10 ? 34 : count < 100 ? 40 : 48;
+  const lg = count >= 100 ? " cheer-cluster-badge--lg" : "";
+  return L.divIcon({
+    html: `<div class="cheer-cluster-badge${lg}" aria-label="${count} clubs">${count}</div>`,
+    className: "cheer-cluster",
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+}
+
+/**
+ * Reveals and focuses a club selected/hovered from outside the map.
+ *
+ * `zoomToShowLayer` (markercluster) zooms in until the marker is no longer
+ * inside a cluster, spiderfying when same-coordinate markers can't be split by
+ * zoom — so a buried/stacked pin surfaces and shows its highlight. Falls back
+ * to a simple pan if the cluster group/marker isn't ready yet.
+ */
+function FocusHighlight({
   clubs,
   focusId,
+  clusterRef,
+  markerRefs,
 }: {
   clubs: MapClub[];
   focusId: string | null;
+  clusterRef: React.RefObject<L.MarkerClusterGroup | null>;
+  markerRefs: React.RefObject<globalThis.Map<string, L.Marker>>;
 }) {
   const map = useMap();
   useEffect(() => {
     if (!focusId) return;
     const club = clubs.find((c) => c.id === focusId);
     if (!club) return;
+
+    const group = clusterRef.current;
+    const marker = markerRefs.current.get(focusId);
+    if (group && marker && group.hasLayer(marker)) {
+      // Zoom/spiderfy until this specific marker is visible, then nudge to it.
+      group.zoomToShowLayer(marker, () => {
+        map.panTo([club.lat, club.lng], { animate: true });
+      });
+      return;
+    }
     map.panTo([club.lat, club.lng], { animate: true });
-  }, [focusId, clubs, map]);
+  }, [focusId, clubs, map, clusterRef, markerRefs]);
   return null;
 }
 
@@ -136,44 +215,72 @@ export default function Map({
     [],
   );
 
-  // Focus = explicit selection wins over hover (used for panning).
+  // Cluster group + per-club marker handles, so FocusHighlight can reveal a
+  // buried pin (zoomToShowLayer) when a club is highlighted from the agenda.
+  const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
+  const markerRefs = useRef<globalThis.Map<string, L.Marker>>(
+    new globalThis.Map(),
+  );
+
+  // Focus = explicit selection wins over hover (used for revealing/panning).
   const focusId = selectedClubId ?? hoveredClubId;
 
   return (
     <>
       <style>{MAP_THEME_CSS}</style>
       <MapContainer
-      center={NL_CENTER}
-      zoom={NL_ZOOM}
-      scrollWheelZoom
-      className="h-full w-full bg-[var(--surface-2)]"
-      // Keep the map below the sticky header (z-1000) and popups usable.
-      style={{ zIndex: 0 }}
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-      <PanToHighlight clubs={clubs} focusId={focusId} />
+        center={NL_CENTER}
+        zoom={NL_ZOOM}
+        scrollWheelZoom
+        className="h-full w-full bg-[var(--surface-2)]"
+        // Keep the map below the sticky header (z-1000) and popups usable.
+        style={{ zIndex: 0 }}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        <FocusHighlight
+          clubs={clubs}
+          focusId={focusId}
+          clusterRef={clusterRef}
+          markerRefs={markerRefs}
+        />
 
-      {clubs.map((club) => {
-        const state =
-          club.id === selectedClubId
-            ? "selected"
-            : club.id === hoveredClubId
-              ? "hover"
-              : "default";
-        return (
-          <ClubMarker
-            key={club.id}
-            club={club}
-            icon={icons[state]}
-            isSelected={club.id === selectedClubId}
-            onHover={onHover}
-            onSelect={onSelect}
-          />
-        );
-      })}
+        <MarkerClusterGroup
+          ref={clusterRef}
+          // Same-coordinate pins fan out on click so each is clickable.
+          spiderfyOnMaxZoom
+          // Touch-friendly: spiderfy still works on tap; the legs stay clickable.
+          showCoverageOnHover={false}
+          // Keep the spiderfy ring roomy enough to tap individual pins on mobile.
+          spiderfyDistanceMultiplier={1.6}
+          // Group pins within ~50px; tighter than the default 80 so distinct
+          // cities don't over-merge while true city-center stacks still group.
+          maxClusterRadius={50}
+          chunkedLoading
+          iconCreateFunction={clusterIcon}
+        >
+          {clubs.map((club) => {
+            const state =
+              club.id === selectedClubId
+                ? "selected"
+                : club.id === hoveredClubId
+                  ? "hover"
+                  : "default";
+            return (
+              <ClubMarker
+                key={club.id}
+                club={club}
+                icon={icons[state]}
+                isSelected={club.id === selectedClubId}
+                onHover={onHover}
+                onSelect={onSelect}
+                markerRefs={markerRefs}
+              />
+            );
+          })}
+        </MarkerClusterGroup>
       </MapContainer>
     </>
   );
@@ -185,12 +292,14 @@ function ClubMarker({
   isSelected,
   onHover,
   onSelect,
+  markerRefs,
 }: {
   club: MapClub;
   icon: L.DivIcon;
   isSelected: boolean;
   onHover: (id: string | null) => void;
   onSelect: (id: string | null) => void;
+  markerRefs: React.RefObject<globalThis.Map<string, L.Marker>>;
 }) {
   const markerRef = useRef<L.Marker>(null);
 
@@ -199,6 +308,16 @@ function ClubMarker({
   useEffect(() => {
     markerRef.current?.setIcon(icon);
   }, [icon]);
+
+  // Register the marker handle so FocusHighlight can reveal it from outside.
+  useEffect(() => {
+    const refs = markerRefs.current;
+    const marker = markerRef.current;
+    if (marker) refs.set(club.id, marker);
+    return () => {
+      refs.delete(club.id);
+    };
+  }, [club.id, markerRefs]);
 
   const socials: { href: string; label: string; Icon: typeof Globe }[] = [];
   if (club.websiteUrl)
