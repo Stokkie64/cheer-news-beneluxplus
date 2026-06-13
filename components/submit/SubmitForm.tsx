@@ -39,7 +39,7 @@ const KIND_HELP: Record<SubmissionKind, string> = {
   event: "Een wedstrijd, clinic, tryout, showcase of andere eenmalige activiteit.",
   gym: "Een terugkerend open-gym moment bij een club.",
   club: "Een club, studententeam, schoolteam of selectieteam dat nog niet op de kaart staat.",
-  correction: "Iets klopt niet? Laat het ons weten met een link en uitleg.",
+  correction: "Klopt er iets niet of ontbreekt er iets? Beschrijf het hieronder.",
 };
 
 const EVENT_TYPE_OPTIONS = [
@@ -152,10 +152,8 @@ export function SubmitForm({ turnstileSiteKey }: SubmitFormProps) {
       case "correction":
         return {
           kind,
-          targetUrl: v("targetUrl"),
-          targetName: v("targetName"),
-          message: v("message"),
-          contactEmail: v("contactEmail"),
+          description: v("description"),
+          url: v("url"),
         } as unknown as SubmissionInput;
     }
   }
@@ -169,7 +167,7 @@ export function SubmitForm({ turnstileSiteKey }: SubmitFormProps) {
     try {
       if (!user) {
         setStatus("idle");
-        setGlobalError("Log in met Google om een evenement te melden.");
+        setGlobalError("Log in met Google om iets te melden of aan te vullen.");
         return;
       }
       const idToken = await user.getIdToken();
@@ -232,7 +230,7 @@ export function SubmitForm({ turnstileSiteKey }: SubmitFormProps) {
           ) : (
             <LogIn className="size-4" aria-hidden />
           )}
-          Inloggen met Google om een evenement te melden
+          Inloggen met Google om iets te melden of aan te vullen
         </Button>
       </div>
     );
@@ -353,9 +351,8 @@ export function SubmitForm({ turnstileSiteKey }: SubmitFormProps) {
 
       {kind === "correction" && (
         <>
-          <TextField label="Link naar de pagina" name="targetUrl" type="url" value={v("targetUrl")} onChange={(x) => set("targetUrl", x)} error={err("targetUrl")} placeholder="https://..." hint="Welke pagina of vermelding klopt niet?" />
-          <TextField label="Of: naam" name="targetName" value={v("targetName")} onChange={(x) => set("targetName", x)} error={err("targetName")} hint="Als je geen link hebt" />
-          <TextAreaField label="Wat klopt er niet?" name="message" value={v("message")} onChange={(x) => set("message", x)} required error={err("message")} rows={5} />
+          <TextAreaField label="Wat klopt er niet of ontbreekt er?" name="description" value={v("description")} onChange={(x) => set("description", x)} required error={err("description")} rows={5} />
+          <TextField label="Link naar de pagina/club/het item (optioneel)" name="url" type="url" value={v("url")} onChange={(x) => set("url", x)} error={err("url")} placeholder="https://..." />
         </>
       )}
 

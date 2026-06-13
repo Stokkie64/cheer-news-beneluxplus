@@ -103,12 +103,12 @@ export const clubPayloadSchema = z.object({
 
 export const correctionPayloadSchema = z.object({
   kind: z.literal("correction"),
-  /** URL of the page/entity the correction is about (optional but helpful). */
-  targetUrl: optionalUrl,
-  /** Free-text name of the entity if no URL is available. */
-  targetName: optionalString(200),
-  message: requiredString("Bericht", 4000),
-  contactEmail,
+  /** Free-text description of what's wrong or missing (required). */
+  description: trimmedString
+    .min(5, "Geef een korte omschrijving (minstens 5 tekens)")
+    .max(4000, "Omschrijving is te lang"),
+  /** Optional link to the page/club/item the correction is about. */
+  url: optionalUrl,
 });
 
 /** Discriminated union over `kind` — what `/api/submit` validates. */
@@ -141,5 +141,5 @@ export const SUBMISSION_KIND_LABEL: Record<SubmissionKind, string> = {
   event: "Evenement",
   gym: "Open gym",
   club: "Club",
-  correction: "Correctie",
+  correction: "Er klopt iets niet / iets ontbreekt",
 };
