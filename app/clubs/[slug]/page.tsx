@@ -14,9 +14,12 @@ import {
   CalendarDays,
   Dumbbell,
   Globe,
+  Mail,
   MapPin,
   Music2,
+  Play,
   Share2,
+  Trophy,
   Users,
 } from "lucide-react";
 import {
@@ -35,6 +38,9 @@ import type {
 import { TeamBadges } from "@/components/TeamBadges";
 import { EventsList } from "@/components/clubs/EventsList";
 import { OpenGymsList } from "@/components/clubs/OpenGymsList";
+import { CoachList } from "@/components/clubs/CoachList";
+import { Achievements } from "@/components/clubs/Achievements";
+import { Card } from "@/components/ui/Card";
 
 export const dynamic = "force-dynamic";
 
@@ -119,28 +125,49 @@ export default async function ClubProfilePage({
         ? `https://www.openstreetmap.org/search?query=${encodeURIComponent(`${club.address}, ${club.city}`)}`
         : null;
 
+  const coaches = club.coaches ?? [];
+  const achievements = club.achievements ?? [];
+  const contactEmail = club.contactEmail ?? club.email ?? null;
+
+  // Instagram leads — it is the channel cheer clubs actually live on — and gets
+  // the accent treatment so it reads as the primary call to action.
   const socials = [
-    club.websiteUrl && {
-      href: club.websiteUrl,
-      label: "Website",
-      icon: Globe,
-    },
     club.instagramUrl && {
       href: club.instagramUrl,
       label: "Instagram",
       icon: AtSign,
+      primary: true,
     },
-    club.tiktokUrl && {
-      href: club.tiktokUrl,
-      label: "TikTok",
-      icon: Music2,
+    club.websiteUrl && {
+      href: club.websiteUrl,
+      label: "Website",
+      icon: Globe,
     },
     club.facebookUrl && {
       href: club.facebookUrl,
       label: "Facebook",
       icon: Share2,
     },
-  ].filter(Boolean) as { href: string; label: string; icon: typeof Globe }[];
+    club.tiktokUrl && {
+      href: club.tiktokUrl,
+      label: "TikTok",
+      icon: Music2,
+    },
+    club.youtubeUrl && {
+      href: club.youtubeUrl,
+      label: "YouTube",
+      icon: Play,
+    },
+  ].filter(Boolean) as {
+    href: string;
+    label: string;
+    icon: typeof Globe;
+    primary?: boolean;
+  }[];
+
+  const hasPractical = Boolean(
+    club.trainingLocation || club.address || club.city || contactEmail,
+  );
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:py-10">
@@ -188,20 +215,33 @@ export default async function ClubProfilePage({
           </div>
 
           {socials.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {socials.map(({ href, label, icon: Icon }) => (
-                <a
-                  key={label}
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={label}
-                  title={label}
-                  className="inline-flex size-9 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
-                >
-                  <Icon className="size-4" aria-hidden />
-                </a>
-              ))}
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {socials.map(({ href, label, icon: Icon, primary }) =>
+                primary ? (
+                  <a
+                    key={label}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-10 items-center gap-2 rounded-full bg-[var(--accent)] px-4 text-sm font-semibold text-white shadow-[var(--shadow-sm)] transition-opacity hover:opacity-90"
+                  >
+                    <Icon className="size-4.5" aria-hidden />
+                    {label}
+                  </a>
+                ) : (
+                  <a
+                    key={label}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={label}
+                    title={label}
+                    className="inline-flex size-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] transition-colors hover:border-[var(--accent)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
+                  >
+                    <Icon className="size-4.5" aria-hidden />
+                  </a>
+                ),
+              )}
             </div>
           )}
 
@@ -218,6 +258,18 @@ export default async function ClubProfilePage({
             <TeamBadges teams={teamData} variant="full" />
           </Section>
 
+          {coaches.length > 0 && (
+            <Section icon={Users} title="Coaches">
+              <CoachList coaches={coaches} />
+            </Section>
+          )}
+
+          {achievements.length > 0 && (
+            <Section icon={Trophy} title="Prestaties">
+              <Achievements achievements={achievements} />
+            </Section>
+          )}
+
           <Section icon={CalendarDays} title="Aankomende evenementen">
             <EventsList events={events} />
           </Section>
@@ -227,33 +279,93 @@ export default async function ClubProfilePage({
           </Section>
         </div>
 
-        {/* Sidebar: location */}
+        {/* Sidebar: practical info */}
         <aside className="lg:sticky lg:top-20 lg:self-start">
-          <Section icon={MapPin} title="Locatie">
-            {club.address || club.city ? (
-              <address className="not-italic text-sm text-[var(--ink)]">
-                {club.address && <span className="block">{club.address}</span>}
-                {club.city && (
-                  <span className="block text-[var(--muted)]">{club.city}</span>
+          <Card className="p-5">
+            <h2 className="mb-4 flex items-center gap-2 font-display text-lg font-bold text-[var(--ink)]">
+              <MapPin className="size-4.5 text-[var(--muted)]" aria-hidden />
+              Praktisch
+            </h2>
+
+            {hasPractical ? (
+              <dl className="flex flex-col gap-4 text-sm">
+                {club.trainingLocation && (
+                  <div className="flex items-start gap-2.5">
+                    <MapPin
+                      className="mt-0.5 size-4 shrink-0 text-[var(--muted)]"
+                      aria-hidden
+                    />
+                    <div className="min-w-0">
+                      <dt className="font-medium text-[var(--ink)]">
+                        Trainingslocatie
+                      </dt>
+                      <dd className="text-[var(--muted)]">
+                        {club.trainingLocation}
+                      </dd>
+                    </div>
+                  </div>
                 )}
-              </address>
+
+                {(club.address || club.city) && (
+                  <div className="flex items-start gap-2.5">
+                    <MapPin
+                      className="mt-0.5 size-4 shrink-0 text-[var(--muted)]"
+                      aria-hidden
+                    />
+                    <div className="min-w-0">
+                      <dt className="font-medium text-[var(--ink)]">Adres</dt>
+                      <dd>
+                        <address className="not-italic text-[var(--muted)]">
+                          {club.address && (
+                            <span className="block">{club.address}</span>
+                          )}
+                          {club.city && (
+                            <span className="block">{club.city}</span>
+                          )}
+                        </address>
+                      </dd>
+                    </div>
+                  </div>
+                )}
+
+                {contactEmail && (
+                  <div className="flex items-start gap-2.5">
+                    <Mail
+                      className="mt-0.5 size-4 shrink-0 text-[var(--muted)]"
+                      aria-hidden
+                    />
+                    <div className="min-w-0">
+                      <dt className="font-medium text-[var(--ink)]">Contact</dt>
+                      <dd>
+                        <a
+                          href={`mailto:${contactEmail}`}
+                          className="break-words text-[var(--secondary)] hover:underline"
+                        >
+                          {contactEmail}
+                        </a>
+                      </dd>
+                    </div>
+                  </div>
+                )}
+              </dl>
             ) : (
               <p className="text-sm text-[var(--muted)]">
-                Locatie nog niet bekend
+                Praktische gegevens nog niet bekend
               </p>
             )}
+
             {osmUrl && (
               <a
                 href={osmUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-[var(--secondary)] hover:underline"
+                className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-[var(--secondary)] hover:underline"
               >
                 <MapPin className="size-3.5" aria-hidden />
                 Bekijk op de kaart
               </a>
             )}
-          </Section>
+          </Card>
         </aside>
       </div>
     </div>

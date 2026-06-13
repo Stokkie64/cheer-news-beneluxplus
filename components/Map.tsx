@@ -15,14 +15,58 @@
  */
 import { useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  Tooltip,
+  useMap,
+} from "react-leaflet";
 import L from "leaflet";
-import { Globe, AtSign, Share2, MapPin } from "lucide-react";
+import { Globe, AtSign, Share2, Music2, MapPin, ArrowRight } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 import type { MapClub } from "@/components/home/types";
 
 const NL_CENTER: [number, number] = [52.2, 5.3];
 const NL_ZOOM = 7;
+
+/**
+ * Theme Leaflet's tooltip/popup chrome with our design tokens. Injected once
+ * (scoped by the `cheer-` class names we set on each Tooltip/Popup) so the
+ * default white-box Leaflet styling doesn't clash with the surface/ink palette.
+ */
+const MAP_THEME_CSS = `
+  .cheer-tooltip.leaflet-tooltip {
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    padding: 4px 8px;
+    font-weight: 600;
+    font-size: 12px;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  .cheer-tooltip .cheer-tooltip-city {
+    display: block;
+    color: var(--muted);
+    font-weight: 500;
+    font-size: 11px;
+  }
+  /* Selected pin's permanent label gets the accent treatment. */
+  .cheer-tooltip--selected.leaflet-tooltip {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #ffffff;
+  }
+  .cheer-tooltip--selected .cheer-tooltip-city {
+    color: rgba(255, 255, 255, 0.85);
+  }
+  /* Neutralize Leaflet's directional tooltip arrow (we omit it for clarity). */
+  .cheer-tooltip.leaflet-tooltip::before { display: none; }
+`;
 
 /** Build a teardrop pin as an inline-SVG divIcon, tinted by state. */
 function pinIcon(state: "default" | "hover" | "selected"): L.DivIcon {
@@ -96,7 +140,9 @@ export default function Map({
   const focusId = selectedClubId ?? hoveredClubId;
 
   return (
-    <MapContainer
+    <>
+      <style>{MAP_THEME_CSS}</style>
+      <MapContainer
       center={NL_CENTER}
       zoom={NL_ZOOM}
       scrollWheelZoom
@@ -122,23 +168,27 @@ export default function Map({
             key={club.id}
             club={club}
             icon={icons[state]}
+            isSelected={club.id === selectedClubId}
             onHover={onHover}
             onSelect={onSelect}
           />
         );
       })}
-    </MapContainer>
+      </MapContainer>
+    </>
   );
 }
 
 function ClubMarker({
   club,
   icon,
+  isSelected,
   onHover,
   onSelect,
 }: {
   club: MapClub;
   icon: L.DivIcon;
+  isSelected: boolean;
   onHover: (id: string | null) => void;
   onSelect: (id: string | null) => void;
 }) {
@@ -157,6 +207,8 @@ function ClubMarker({
     socials.push({ href: club.instagramUrl, label: "Instagram", Icon: AtSign });
   if (club.facebookUrl)
     socials.push({ href: club.facebookUrl, label: "Facebook", Icon: Share2 });
+  if (club.tiktokUrl)
+    socials.push({ href: club.tiktokUrl, label: "TikTok", Icon: Music2 });
 
   return (
     <Marker
@@ -169,8 +221,26 @@ function ClubMarker({
         click: () => onSelect(club.id),
       }}
     >
+      {/*
+        Club identity label. The selected club's label is `permanent` so it
+        stays readable during the pin↔agenda sync; all others show on hover.
+        Re-keyed on selection so Leaflet rebuilds the tooltip with the right
+        permanence/styling (it can't toggle `permanent` in place).
+      */}
+      <Tooltip
+        key={isSelected ? "permanent" : "hover"}
+        direction="top"
+        offset={[0, -28]}
+        opacity={1}
+        permanent={isSelected}
+        className={`cheer-tooltip${isSelected ? " cheer-tooltip--selected" : ""}`}
+      >
+        {club.name}
+        <span className="cheer-tooltip-city">{club.city}</span>
+      </Tooltip>
+
       <Popup>
-        <div className="flex min-w-44 flex-col gap-1">
+        <div className="flex min-w-48 flex-col gap-1">
           <span className="font-display text-sm font-bold text-[var(--ink)]">
             {club.name}
           </span>
@@ -180,19 +250,21 @@ function ClubMarker({
           </span>
           <Link
             href={`/clubs/${club.slug}`}
-            className="mt-1 text-xs font-semibold text-[var(--accent)] hover:underline"
+            className="mt-2 inline-flex items-center justify-center gap-1 rounded-md bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
           >
-            Bekijk clubprofiel →
+            Bekijk clubpagina
+            <ArrowRight className="size-3.5" aria-hidden />
           </Link>
           {socials.length > 0 && (
-            <div className="mt-1 flex items-center gap-2">
+            <div className="mt-2 flex items-center gap-3 border-t border-[var(--border)] pt-2">
               {socials.map(({ href, label, Icon }) => (
                 <a
                   key={label}
                   href={href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label={label}
+                  aria-label={`${club.name} op ${label}`}
+                  title={label}
                   className="text-[var(--muted)] hover:text-[var(--ink)]"
                 >
                   <Icon className="size-4" aria-hidden />

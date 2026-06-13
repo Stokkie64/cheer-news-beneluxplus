@@ -62,6 +62,12 @@ export interface TeamSummary {
   ageGroup: AgeGroup;
 }
 
+/** A coach/trainer at a club. */
+export interface Coach {
+  name: string;
+  role: string | null; // e.g. "Head Coach", "Tumbling Coach"
+}
+
 // ---- Clubs ----
 
 export interface ClubBase {
@@ -85,6 +91,14 @@ export interface ClubBase {
   status: "active" | "inactive";
   locked: boolean;
   teamsSummary: TeamSummary[];
+  // Richer profile fields (populated by the deep-research pass; optional so
+  // existing docs without them stay valid — consumers default to [] / null).
+  coaches?: Coach[];
+  contactEmail?: string | null;
+  trainingLocation?: string | null; // venue name/address where the club trains
+  achievements?: string[]; // notable results, e.g. "NK 2024 — 1st place Senior Coed"
+  youtubeUrl?: string | null;
+  email?: string | null;
 }
 
 export interface ClubClient extends ClubBase {
