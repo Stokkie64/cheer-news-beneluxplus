@@ -52,17 +52,10 @@ env:
     value: jesse@adapta.nl,wonnink.jesse@gmail.com
     availability:
       - RUNTIME
-  # Server-only secrets (create with: firebase apphosting:secrets:set <name>)
+  # Server-only secrets (create with: firebase apphosting:secrets:set <name>).
+  # Turnstile is optional — the submission form degrades gracefully without it.
+  # Add TURNSTILE_SECRET_KEY / NEXT_PUBLIC_TURNSTILE_SITE_KEY here once configured.
   - variable: GEMINI_API_KEY
     secret: gemini-api-key
     availability:
-      - RUNTIME
-  - variable: TURNSTILE_SECRET_KEY
-    secret: turnstile-secret-key
-    availability:
-      - RUNTIME
-  - variable: NEXT_PUBLIC_TURNSTILE_SITE_KEY
-    secret: turnstile-site-key
-    availability:
-      - BUILD
       - RUNTIME
