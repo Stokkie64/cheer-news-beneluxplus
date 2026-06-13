@@ -1,0 +1,14 @@
+rules_version = '2';
+
+// Cheer News BeneluxPlus — deny ALL direct client access.
+// The app reads/writes exclusively through the server (Firebase Admin SDK in
+// SSR + API routes), which bypasses these rules. There is intentionally no
+// public-read or anon-write surface: every read goes through SSR, every write
+// goes through a validated API route or the scraper service account.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+/*
+ * Cheer News BeneluxPlus — design tokens.
+ * Energetic but restrained: warm near-white canvas, near-black ink, one bold
+ * "spirit" accent (magenta-red) + a teal secondary for open-gym coding.
+ * Deliberately NOT the default indigo/violet AI-starter palette.
+ */
+
+:root {
+  /* Surfaces & ink */
+  --bg: #faf9f6;
+  --surface: #ffffff;
+  --surface-2: #f3f1ea;
+  --ink: #17161b;
+  --muted: #6b6973;
+  --border: #e7e4db;
+
+  /* Brand */
+  --accent: #ff2d6b; /* spirit magenta-red */
+  --accent-fg: #ffffff;
+  --accent-soft: #ffe3ec;
+  --secondary: #0e7c7b; /* teal */
+  --secondary-soft: #d6f0ef;
+
+  /* Event-type coding */
+  --type-competition: #ff2d6b;
+  --type-open_gym: #0e7c7b;
+  --type-clinic: #e8920c;
+  --type-tryout: #7c3aed;
+  --type-showcase: #2563eb;
+  --type-training: #6b6973;
+
+  --radius: 0.75rem;
+  --shadow-sm: 0 1px 2px rgb(23 22 27 / 0.06), 0 1px 1px rgb(23 22 27 / 0.04);
+  --shadow-md: 0 4px 16px rgb(23 22 27 / 0.08);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-secondary: var(--secondary);
+  --color-secondary-soft: var(--secondary-soft);
+
+  --font-sans: var(--font-geist-sans);
+  --font-display: var(--font-display), var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --radius-card: var(--radius);
+  --shadow-card: var(--shadow-md);
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
