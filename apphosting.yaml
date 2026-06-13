@@ -52,6 +52,11 @@ env:
     value: wonnink.jesse@gmail.com
     availability:
       - RUNTIME
+  - variable: NEXT_PUBLIC_ADMIN_EMAILS
+    value: wonnink.jesse@gmail.com
+    availability:
+      - BUILD
+      - RUNTIME
   # Gmail address used to send maintainer notification emails (not a secret).
   - variable: GMAIL_USER
     value: wonnink.jesse@gmail.com

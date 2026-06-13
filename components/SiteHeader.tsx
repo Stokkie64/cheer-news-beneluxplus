@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
+import { AdminNavLink } from "@/components/AdminNavLink";
 
 const NAV = [
   { href: "/", label: "Kaart & agenda" },
@@ -24,6 +25,7 @@ export function SiteHeader() {
               {item.label}
             </Link>
           ))}
+          <AdminNavLink />
         </nav>
         <div className="ml-auto">
           <Button asChild size="sm">
