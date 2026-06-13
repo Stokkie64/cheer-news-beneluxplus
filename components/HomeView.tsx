@@ -39,7 +39,7 @@ const Map = dynamic(() => import("@/components/Map"), {
 
 const EMPTY_FILTERS: HomeFilters = {
   types: new Set(),
-  city: null,
+  province: null,
   from: null,
   to: null,
   openGymsOnly: false,
@@ -69,11 +69,11 @@ export function HomeView({
     return map;
   }, [clubs]);
 
-  // Cities for the dropdown — union of club cities and item cities.
-  const cities = useMemo(() => {
+  // Provinces for the dropdown — union of club regions and item provinces.
+  const provinces = useMemo(() => {
     const set = new Set<string>();
-    for (const c of clubs) if (c.city) set.add(c.city);
-    for (const it of items) if (it.city) set.add(it.city);
+    for (const c of clubs) if (c.region) set.add(c.region);
+    for (const it of items) if (it.province) set.add(it.province);
     return [...set].sort((a, b) => a.localeCompare(b, "nl"));
   }, [clubs, items]);
 
@@ -82,7 +82,7 @@ export function HomeView({
     return items.filter((it) => {
       if (filters.openGymsOnly && !it.isOpenGym) return false;
       if (filters.types.size > 0 && !filters.types.has(it.type)) return false;
-      if (filters.city && it.city !== filters.city) return false;
+      if (filters.province && it.province !== filters.province) return false;
       const d = dayKey(it.startsAt);
       if (filters.from && d < filters.from) return false;
       if (filters.to && d > filters.to) return false;
@@ -90,12 +90,13 @@ export function HomeView({
     });
   }, [items, filters]);
 
-  // Filter map pins to the city filter (event-type/date filters don't apply to
-  // clubs themselves, but the city filter does so the two panels stay coherent).
+  // Filter map pins to the province filter (event-type/date filters don't apply
+  // to clubs themselves, but the province filter does so the two panels stay
+  // coherent).
   const filteredClubs = useMemo(() => {
-    if (!filters.city) return clubs;
-    return clubs.filter((c) => c.city === filters.city);
-  }, [clubs, filters.city]);
+    if (!filters.province) return clubs;
+    return clubs.filter((c) => c.region === filters.province);
+  }, [clubs, filters.province]);
 
   // Toggle selection off when clicking the already-selected club.
   function handleSelect(id: string | null) {
@@ -126,7 +127,7 @@ export function HomeView({
       <Filters
         filters={filters}
         onChange={setFilters}
-        cities={cities}
+        provinces={provinces}
         resultCount={filteredItems.length}
       />
       <div className="min-h-0 flex-1">

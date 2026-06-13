@@ -57,6 +57,7 @@ export default async function Home() {
         url: e.url ?? (club ? clubProfileUrl(club.slug) : null),
         locationText: e.locationText ?? club?.city ?? null,
         city: club?.city ?? null,
+        province: club?.region ?? null,
         isOpenGym: false,
       };
     });
@@ -76,6 +77,7 @@ export default async function Home() {
         url: club ? clubProfileUrl(club.slug) : null,
         locationText: occ.locationText ?? club?.city ?? null,
         city: club?.city ?? null,
+        province: club?.region ?? null,
         isOpenGym: true,
       }));
     });
@@ -101,6 +103,7 @@ export default async function Home() {
       name: c.name,
       slug: c.slug,
       city: c.city,
+      region: c.region,
       lat: c.lat,
       lng: c.lng,
       websiteUrl: c.websiteUrl,

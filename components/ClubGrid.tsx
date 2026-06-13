@@ -34,21 +34,23 @@ interface ClubGridProps {
 /**
  * Searchable, filterable directory grid. All filtering is in-memory over the
  * server-provided list: free-text on name/city plus level / division / age /
- * city facets derived from each club's `teamsSummary`.
+ * province facets (province derived from each club's `region`).
  */
 export function ClubGrid({ clubs }: ClubGridProps) {
   const [query, setQuery] = useState("");
   const [level, setLevel] = useState<Level | "">("");
   const [division, setDivision] = useState<Division | "">("");
   const [age, setAge] = useState<AgeGroup | "">("");
-  const [city, setCity] = useState("");
+  const [province, setProvince] = useState("");
 
-  // Cities present in the dataset, sorted NL-style for the dropdown.
-  const cities = useMemo(
+  // Provinces present in the dataset, sorted NL-style for the dropdown.
+  const provinces = useMemo(
     () =>
-      [...new Set(clubs.map((c) => c.city).filter(Boolean))].sort((a, b) =>
-        a.localeCompare(b, "nl"),
-      ),
+      [
+        ...new Set(
+          clubs.map((c) => c.region).filter((r): r is string => Boolean(r)),
+        ),
+      ].sort((a, b) => a.localeCompare(b, "nl")),
     [clubs],
   );
 
@@ -59,7 +61,7 @@ export function ClubGrid({ clubs }: ClubGridProps) {
         const haystack = `${c.name} ${c.city}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
-      if (city && c.city !== city) return false;
+      if (province && c.region !== province) return false;
       const summary = c.teamsSummary ?? [];
       if (level && !summary.some((t) => t.level === level)) return false;
       if (division && !summary.some((t) => t.division === division))
@@ -67,17 +69,21 @@ export function ClubGrid({ clubs }: ClubGridProps) {
       if (age && !summary.some((t) => t.ageGroup === age)) return false;
       return true;
     });
-  }, [clubs, query, city, level, division, age]);
+  }, [clubs, query, province, level, division, age]);
 
   const hasActive =
-    query !== "" || level !== "" || division !== "" || age !== "" || city !== "";
+    query !== "" ||
+    level !== "" ||
+    division !== "" ||
+    age !== "" ||
+    province !== "";
 
   function reset() {
     setQuery("");
     setLevel("");
     setDivision("");
     setAge("");
-    setCity("");
+    setProvince("");
   }
 
   return (
@@ -124,10 +130,10 @@ export function ClubGrid({ clubs }: ClubGridProps) {
           options={AGE_OPTIONS.map((a) => [a, AGE_GROUP_LABEL[a]])}
         />
         <FilterSelect
-          label="Plaats"
-          value={city}
-          onChange={setCity}
-          options={cities.map((c) => [c, c])}
+          label="Provincie"
+          value={province}
+          onChange={setProvince}
+          options={provinces.map((p) => [p, p])}
         />
 
         {hasActive && (

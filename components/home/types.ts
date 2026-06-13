@@ -23,8 +23,10 @@ export interface CalendarItem {
   url: string | null;
   /** Free-text location for the agenda line. */
   locationText: string | null;
-  /** City derived from the owning club (used by the city filter). */
+  /** City derived from the owning club (used for the agenda line). */
   city: string | null;
+  /** Province derived from the owning club (used by the province filter). */
+  province: string | null;
   /** True for open-gym occurrences (drives the "Alleen open gyms" toggle). */
   isOpenGym: boolean;
 }
@@ -35,6 +37,7 @@ export interface MapClub {
   name: string;
   slug: string;
   city: string;
+  region: string | null;
   lat: number;
   lng: number;
   websiteUrl: string | null;
@@ -46,8 +49,8 @@ export interface MapClub {
 export interface HomeFilters {
   /** Selected event types; empty set = all types. */
   types: Set<EventType>;
-  /** Selected city; null = all cities. */
-  city: string | null;
+  /** Selected province; null = all provinces. */
+  province: string | null;
   /** ISO date (yyyy-MM-dd) inclusive lower bound, or null. */
   from: string | null;
   /** ISO date (yyyy-MM-dd) inclusive upper bound, or null. */

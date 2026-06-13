@@ -19,13 +19,13 @@ const ALL_TYPES: EventType[] = [
 interface FiltersProps {
   filters: HomeFilters;
   onChange: (next: HomeFilters) => void;
-  /** Cities present in the dataset (sorted), for the city dropdown. */
-  cities: string[];
+  /** Provinces present in the dataset (sorted), for the province dropdown. */
+  provinces: string[];
   /** Count of items after filtering, shown as a live result count. */
   resultCount: number;
 }
 
-export function Filters({ filters, onChange, cities, resultCount }: FiltersProps) {
+export function Filters({ filters, onChange, provinces, resultCount }: FiltersProps) {
   function toggleType(type: EventType) {
     const next = new Set(filters.types);
     if (next.has(type)) next.delete(type);
@@ -35,7 +35,7 @@ export function Filters({ filters, onChange, cities, resultCount }: FiltersProps
 
   const hasActive =
     filters.types.size > 0 ||
-    filters.city !== null ||
+    filters.province !== null ||
     filters.from !== null ||
     filters.to !== null ||
     filters.openGymsOnly;
@@ -43,7 +43,7 @@ export function Filters({ filters, onChange, cities, resultCount }: FiltersProps
   function reset() {
     onChange({
       types: new Set(),
-      city: null,
+      province: null,
       from: null,
       to: null,
       openGymsOnly: false,
@@ -104,17 +104,17 @@ export function Filters({ filters, onChange, cities, resultCount }: FiltersProps
       {/* Row: city + date range + open-gym toggle */}
       <div className="flex flex-wrap items-center gap-2">
         <select
-          value={filters.city ?? ""}
+          value={filters.province ?? ""}
           onChange={(e) =>
-            onChange({ ...filters, city: e.target.value || null })
+            onChange({ ...filters, province: e.target.value || null })
           }
-          aria-label="Plaats"
+          aria-label="Provincie"
           className="h-8 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-medium text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
         >
-          <option value="">Alle plaatsen</option>
-          {cities.map((city) => (
-            <option key={city} value={city}>
-              {city}
+          <option value="">Alle provincies</option>
+          {provinces.map((province) => (
+            <option key={province} value={province}>
+              {province}
             </option>
           ))}
         </select>

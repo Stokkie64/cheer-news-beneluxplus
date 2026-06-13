@@ -26,7 +26,8 @@
  * the agenda) we ask the cluster group to reveal it (`zoomToShowLayer`, which
  * zooms/spiderfies as needed) so a buried pin surfaces and shows its highlight.
  */
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
   MapContainer,
@@ -38,7 +39,15 @@ import {
 } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
-import { Globe, AtSign, Share2, Music2, MapPin, ArrowRight } from "lucide-react";
+import {
+  Globe,
+  AtSign,
+  Share2,
+  Music2,
+  MapPin,
+  ArrowRight,
+  Maximize,
+} from "lucide-react";
 import "leaflet/dist/leaflet.css";
 import "react-leaflet-cluster/dist/assets/MarkerCluster.css";
 import "react-leaflet-cluster/dist/assets/MarkerCluster.Default.css";
@@ -46,6 +55,8 @@ import type { MapClub } from "@/components/home/types";
 
 const NL_CENTER: [number, number] = [52.2, 5.3];
 const NL_ZOOM = 7;
+// City-level cap so focusing a pin surfaces it without flying all the way in.
+const FOCUS_MAX_ZOOM = 11;
 
 /**
  * Theme Leaflet's tooltip/popup/cluster chrome with our design tokens. Injected
@@ -107,6 +118,28 @@ const MAP_THEME_CSS = `
   .cheer-cluster-badge--lg { font-size: 14px; }
   .leaflet-cluster-anim .leaflet-marker-icon,
   .leaflet-cluster-anim .leaflet-marker-shadow { transition: transform 0.25s ease-out, opacity 0.25s ease-in; }
+
+  /* ---- "Heel Nederland" reset control. ---- */
+  .cheer-reset-control .cheer-reset-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 4px rgb(23 22 27 / 0.18);
+    font-weight: 600;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .cheer-reset-control .cheer-reset-btn:hover { border-color: var(--accent); }
+  .cheer-reset-control .cheer-reset-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
 `;
 
 /** Build a teardrop pin as an inline-SVG divIcon, tinted by state. */
@@ -180,7 +213,12 @@ function FocusHighlight({
     const marker = markerRefs.current.get(focusId);
     if (group && marker && group.hasLayer(marker)) {
       // Zoom/spiderfy until this specific marker is visible, then nudge to it.
+      // `zoomToShowLayer` can fly in too deep, so clamp to a city-level zoom in
+      // its callback before panning to the pin.
       group.zoomToShowLayer(marker, () => {
+        if (map.getZoom() > FOCUS_MAX_ZOOM) {
+          map.setZoom(FOCUS_MAX_ZOOM);
+        }
         map.panTo([club.lat, club.lng], { animate: true });
       });
       return;
@@ -188,6 +226,61 @@ function FocusHighlight({
     map.panTo([club.lat, club.lng], { animate: true });
   }, [focusId, clubs, map, clusterRef, markerRefs]);
   return null;
+}
+
+/**
+ * A "Heel Nederland" reset control: resets the view to the full-country
+ * overview and clears any active selection. Rendered into a real Leaflet
+ * control container (top-left, below the zoom buttons) via a portal so it lives
+ * inside the map's control pane and doesn't overlap the zoom controls. The
+ * button is a real <button>, so it's keyboard-focusable and Enter/Space work.
+ */
+function ResetViewControl({
+  onSelect,
+}: {
+  onSelect: (id: string | null) => void;
+}) {
+  const map = useMap();
+  const [container, setContainer] = useState<HTMLElement | null>(null);
+
+  const onReset = () => {
+    map.setView(NL_CENTER, NL_ZOOM, { animate: true });
+    onSelect(null);
+  };
+
+  useEffect(() => {
+    const control = new L.Control({ position: "topleft" });
+    control.onAdd = () => {
+      const div = L.DomUtil.create(
+        "div",
+        "leaflet-bar cheer-reset-control",
+      );
+      // Don't let clicks/scroll on the control fall through to the map.
+      L.DomEvent.disableClickPropagation(div);
+      L.DomEvent.disableScrollPropagation(div);
+      setContainer(div);
+      return div;
+    };
+    control.addTo(map);
+    return () => {
+      control.remove();
+      setContainer(null);
+    };
+  }, [map]);
+
+  if (!container) return null;
+  return createPortal(
+    <button
+      type="button"
+      className="cheer-reset-btn"
+      onClick={onReset}
+      aria-label="Toon heel Nederland"
+    >
+      <Maximize className="size-3.5" aria-hidden />
+      Heel Nederland
+    </button>,
+    container,
+  );
 }
 
 interface MapProps {
@@ -246,6 +339,7 @@ export default function Map({
           clusterRef={clusterRef}
           markerRefs={markerRefs}
         />
+        <ResetViewControl onSelect={onSelect} />
 
         <MarkerClusterGroup
           ref={clusterRef}
