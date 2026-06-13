@@ -1,0 +1,23 @@
+[
+  {
+    "name": "Cheersport Netherlands",
+    "url": "https://www.cheersport.nl/en/events/",
+    "type": "federation",
+    "sourceTier": "federation",
+    "fetchStrategy": "http"
+  },
+  {
+    "name": "Dutch Cheer and Dance (Nederlandse Cheerleading Associatie)",
+    "url": "http://www.dutchcheer.nl/agenda_en_deadlines.html",
+    "type": "federation",
+    "sourceTier": "federation",
+    "fetchStrategy": "http"
+  },
+  {
+    "name": "Team Cheerleading Nederland",
+    "url": "https://www.teamcheerleading.nl/agenda/",
+    "type": "federation",
+    "sourceTier": "federation",
+    "fetchStrategy": "http"
+  }
+]
