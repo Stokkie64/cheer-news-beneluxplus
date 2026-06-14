@@ -1,0 +1,12 @@
+# Normalise line endings to LF across platforms.
+* text=auto eol=lf
+
+# Treat lockfile and generated artifacts as collapsed in diffs.
+package-lock.json linguist-generated=true -diff
+*.tsbuildinfo linguist-generated=true -diff
+
+# Binary assets.
+*.ico binary
+*.png binary
+*.jpg binary
+*.webp binary
