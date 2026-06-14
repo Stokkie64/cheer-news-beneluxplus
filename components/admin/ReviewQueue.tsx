@@ -248,7 +248,7 @@ export function ReviewQueue({ user }: ReviewQueueProps) {
               <section
                 key={String(col.key)}
                 className={cn(
-                  "flex min-h-32 flex-col gap-3 rounded-[var(--radius)] border bg-[var(--surface-2)]/40 p-3",
+                  "flex min-w-0 flex-col gap-3 rounded-[var(--radius)] border bg-[var(--surface-2)]/40 p-3",
                   col.ring,
                 )}
               >
@@ -266,7 +266,9 @@ export function ReviewQueue({ user }: ReviewQueueProps) {
                     {colCards.length}
                   </span>
                 </header>
-                <ul className="flex flex-col gap-3">
+                {/* Each column scrolls on its own so long cards never blow up
+                    the page height. */}
+                <ul className="flex max-h-[calc(100vh-14rem)] min-w-0 flex-col gap-3 overflow-y-auto pr-1">
                   {colCards.map((card) => (
                     <ReviewItem
                       key={card.key}
@@ -280,7 +282,7 @@ export function ReviewQueue({ user }: ReviewQueueProps) {
                         void save(card, decision, card.note);
                       }}
                       onNoteChange={(note) => patchCard(card.key, { note })}
-                      onNoteSave={(note) => void save(card, card.decision, note)}
+                      onNoteSave={(note) => save(card, card.decision, note)}
                     />
                   ))}
                 </ul>

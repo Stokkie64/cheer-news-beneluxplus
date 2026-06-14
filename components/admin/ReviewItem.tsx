@@ -30,8 +30,11 @@ interface Props {
   note: string;
   onDecide: (decision: Decision) => void;
   onNoteChange: (note: string) => void;
-  onNoteSave: (note: string) => void;
+  /** Persist the note; resolves true on success. Called on blur (autosave). */
+  onNoteSave: (note: string) => Promise<boolean>;
 }
+
+type NoteStatus = "idle" | "dirty" | "saving" | "saved" | "error";
 
 /** Render a payload object as label/value rows, skipping empty values. */
 function PayloadRows({ payload }: { payload: Record<string, unknown> }) {
@@ -42,11 +45,13 @@ function PayloadRows({ payload }: { payload: Record<string, unknown> }) {
     return <p className="text-sm text-[var(--muted)]">(geen velden)</p>;
   }
   return (
-    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+    <dl className="grid min-w-0 grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
       {entries.map(([key, val]) => (
         <React.Fragment key={key}>
           <dt className="font-medium text-[var(--muted)]">{key}</dt>
-          <dd className="break-words text-[var(--ink)]">{String(val)}</dd>
+          <dd className="min-w-0 text-[var(--ink)] [overflow-wrap:anywhere]">
+            {String(val)}
+          </dd>
         </React.Fragment>
       ))}
     </dl>
@@ -92,6 +97,14 @@ const DECISIONS: {
 
 export function ReviewItem(props: Props) {
   const { kind, submission, event, decision, note } = props;
+  const [noteStatus, setNoteStatus] = React.useState<NoteStatus>("idle");
+  const [expanded, setExpanded] = React.useState(false);
+
+  async function saveNote(value: string) {
+    setNoteStatus("saving");
+    const ok = await props.onNoteSave(value);
+    setNoteStatus(ok ? "saved" : "error");
+  }
 
   const title =
     kind === "submission" && submission
@@ -105,6 +118,25 @@ export function ReviewItem(props: Props) {
         ? `Gescraped · ${EVENT_TYPE_LABEL[event.type]} · ${formatWhen(event.startsAt)}`
         : "";
 
+  const payload: Record<string, unknown> =
+    kind === "submission" && submission
+      ? submission.payload
+      : event
+        ? {
+            titel: event.title,
+            type: EVENT_TYPE_LABEL[event.type],
+            start: formatWhen(event.startsAt),
+            locatie: event.locationText,
+            url: event.url,
+            omschrijving: event.description,
+          }
+        : {};
+  // Long research notes/blurbs would make a card tower over the column; collapse
+  // by default and let the maintainer expand the few that need a closer read.
+  const isLong = Object.values(payload).some(
+    (v) => v != null && String(v).length > 180,
+  );
+
   return (
     <li>
       <Card>
@@ -117,30 +149,49 @@ export function ReviewItem(props: Props) {
             <p className="mt-0.5 text-xs text-[var(--muted)]">{meta}</p>
           </div>
 
-          {kind === "submission" && submission ? (
-            <PayloadRows payload={submission.payload} />
-          ) : event ? (
-            <PayloadRows
-              payload={{
-                titel: event.title,
-                type: EVENT_TYPE_LABEL[event.type],
-                start: formatWhen(event.startsAt),
-                locatie: event.locationText,
-                url: event.url,
-                omschrijving: event.description,
-              }}
-            />
-          ) : null}
+          <div
+            className={cn(
+              "relative",
+              isLong && !expanded && "max-h-28 overflow-hidden",
+            )}
+          >
+            <PayloadRows payload={payload} />
+            {isLong && !expanded && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[var(--surface)] to-transparent" />
+            )}
+          </div>
+          {isLong && (
+            <button
+              type="button"
+              onClick={() => setExpanded((x) => !x)}
+              className="self-start text-xs font-medium text-[var(--accent)] hover:underline"
+            >
+              {expanded ? "Toon minder" : "Toon meer"}
+            </button>
+          )}
 
-          {/* Note */}
-          <textarea
-            value={note}
-            onChange={(e) => props.onNoteChange(e.target.value)}
-            onBlur={(e) => props.onNoteSave(e.target.value)}
-            placeholder="Notitie (optioneel)…"
-            rows={2}
-            className="w-full resize-y rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-          />
+          {/* Note — autosaves on blur; status shown below so it's clear. */}
+          <div className="flex flex-col gap-1">
+            <textarea
+              value={note}
+              onChange={(e) => {
+                props.onNoteChange(e.target.value);
+                setNoteStatus("dirty");
+              }}
+              onBlur={(e) => void saveNote(e.target.value)}
+              placeholder="Notitie (optioneel)…"
+              rows={2}
+              className="w-full resize-y rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+            />
+            <span className="h-3.5 text-[0.7rem] leading-none text-[var(--muted)]">
+              {noteStatus === "dirty" && "Niet opgeslagen — klik buiten het veld"}
+              {noteStatus === "saving" && "Opslaan…"}
+              {noteStatus === "saved" && "Opgeslagen ✓"}
+              {noteStatus === "error" && (
+                <span className="text-[var(--accent)]">Opslaan mislukt</span>
+              )}
+            </span>
+          </div>
 
           {/* Decision buttons */}
           <div className="flex flex-wrap gap-1.5">
