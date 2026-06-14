@@ -19,7 +19,7 @@
  * `server-only` marker package, whose default export throws outside a React
  * Server environment. We re-exec once with `--conditions=react-server` so the
  * package resolves to its no-op variant; only then do we import them. (Same
- * trick as scripts/seed.ts.)
+ * the re-exec guard below.)
  */
 import { spawnSync } from "node:child_process";
 // Type-only: erased at compile time, so this does NOT import the server-only

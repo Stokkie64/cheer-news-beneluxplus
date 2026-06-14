@@ -11,7 +11,7 @@
  * upsert. High-confidence events publish; low-confidence go to `pending` for
  * the /admin review queue. Locked docs (manually edited) are never clobbered.
  *
- * See scripts/seed.ts for the `server-only` re-exec rationale.
+ * The re-exec guard below resolves the `server-only` marker under tsx.
  */
 import { spawnSync } from "node:child_process";
 

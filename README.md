@@ -46,8 +46,14 @@ npm test             # 25 unit tests (recurrence/DST, validation, dedup, extract
 
 ## Data scripts
 
+Firestore is the single source of truth — there is **no seed/re-seed step** (it
+was removed because re-seeding from `data/*.json` repeatedly overwrote
+hand-verified data: logos, blurbs, schedules). Club/team/event data is edited
+directly via the Admin SDK.
+
 ```bash
-npm run seed                       # upsert data/*.seed.json into Firestore (idempotent)
+npm run submissions                # read the public "iets melden" pile from prod
+npm run digest                     # send the daily submission digest (cron does this)
 npm run aggregate                  # run the daily pipeline once
 npm run aggregate -- --dry-run     # fetch + extract + COUNT, write nothing (quota estimation)
 ```

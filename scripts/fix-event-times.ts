@@ -16,7 +16,7 @@
  * Locked docs (manually edited) are never touched.
  *
  * Run with: npx tsx --env-file=.env.local scripts/fix-event-times.ts
- * See scripts/seed.ts for the `server-only` re-exec rationale.
+ * The re-exec guard below resolves the `server-only` marker under tsx.
  */
 import { spawnSync } from "node:child_process";
 

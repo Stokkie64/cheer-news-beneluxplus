@@ -15,7 +15,7 @@
  *
  * NOTE ON `server-only`: ../lib/firebaseAdmin imports the `server-only` marker
  * package; we re-exec once with `--conditions=react-server` so it resolves to
- * its no-op variant before importing the admin SDK. (Same trick as seed.ts.)
+ * its no-op variant before importing the admin SDK. (re-exec guard below.)
  */
 import { spawnSync } from "node:child_process";
 
