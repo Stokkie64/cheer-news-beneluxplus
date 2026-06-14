@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { formatInTimeZone } from "date-fns-tz";
-import { expandOpenGym, buildWeeklyRRule } from "@/lib/recurrence";
+import { expandOpenGym, buildWeeklyRRule, weeklySlots } from "@/lib/recurrence";
 import type { OpenGymClient } from "@/lib/types";
 
 const TZ = "Europe/Amsterdam";
@@ -82,6 +82,60 @@ describe("expandOpenGym", () => {
     );
     expect(occ).toHaveLength(1);
     expect(occ[0].startsAt).toBe("2025-06-13T19:00:00+02:00");
+  });
+});
+
+describe("weeklySlots", () => {
+  it("emits one slot per BYDAY day, sorted by weekday, with Dutch weekday names", () => {
+    const gym = makeGym({
+      rrule: "RRULE:FREQ=WEEKLY;BYDAY=WE,MO",
+      startTime: "17:30",
+      endTime: "19:30",
+    });
+    const slots = weeklySlots(gym);
+    expect(slots).toEqual([
+      {
+        weekdayIndex: 0,
+        weekday: "Maandag",
+        startTime: "17:30",
+        endTime: "19:30",
+      },
+      {
+        weekdayIndex: 2,
+        weekday: "Woensdag",
+        startTime: "17:30",
+        endTime: "19:30",
+      },
+    ]);
+  });
+
+  it("maps each BYDAY token to its Dutch weekday name", () => {
+    const cases: Array<[string, string]> = [
+      ["MO", "Maandag"],
+      ["TU", "Dinsdag"],
+      ["WE", "Woensdag"],
+      ["TH", "Donderdag"],
+      ["FR", "Vrijdag"],
+      ["SA", "Zaterdag"],
+      ["SU", "Zondag"],
+    ];
+    for (const [token, name] of cases) {
+      const slots = weeklySlots(
+        makeGym({ rrule: `RRULE:FREQ=WEEKLY;BYDAY=${token}` }),
+      );
+      expect(slots).toHaveLength(1);
+      expect(slots[0].weekday).toBe(name);
+    }
+  });
+
+  it("returns [] for a null rrule", () => {
+    expect(weeklySlots(makeGym({ rrule: null }))).toEqual([]);
+  });
+
+  it("returns [] for a non-weekly rrule", () => {
+    expect(
+      weeklySlots(makeGym({ rrule: "RRULE:FREQ=MONTHLY;BYDAY=MO" })),
+    ).toEqual([]);
   });
 });
 

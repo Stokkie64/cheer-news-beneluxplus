@@ -62,25 +62,29 @@ export default async function Home() {
       };
     });
 
-    // Open gyms → expanded occurrences → CalendarItem.
-    const gymItems: CalendarItem[] = gyms.flatMap((gym) => {
-      const club = clubsById.get(gym.clubId);
-      const occurrences = expandOpenGym(gym, now, horizon);
-      return occurrences.map((occ, i) => ({
-        id: `gym:${gym.id}:${i}`,
-        clubId: gym.clubId,
-        title: club ? `Open gym · ${club.name}` : EVENT_TYPE_LABEL.open_gym,
-        type: "open_gym" as const,
-        allDay: false,
-        startsAt: occ.startsAt,
-        endsAt: occ.endsAt,
-        url: club ? clubProfileUrl(club.slug) : null,
-        locationText: occ.locationText ?? club?.city ?? null,
-        city: club?.city ?? null,
-        province: club?.region ?? null,
-        isOpenGym: true,
-      }));
-    });
+    // Open gyms → expanded occurrences → CalendarItem. The open_gyms collection
+    // also holds team trainings (sessionType === "training"); those belong only
+    // on club pages, never on the public agenda, so filter them out here.
+    const gymItems: CalendarItem[] = gyms
+      .filter((gym) => gym.sessionType !== "training")
+      .flatMap((gym) => {
+        const club = clubsById.get(gym.clubId);
+        const occurrences = expandOpenGym(gym, now, horizon);
+        return occurrences.map((occ, i) => ({
+          id: `gym:${gym.id}:${i}`,
+          clubId: gym.clubId,
+          title: club ? `Open gym · ${club.name}` : EVENT_TYPE_LABEL.open_gym,
+          type: "open_gym" as const,
+          allDay: false,
+          startsAt: occ.startsAt,
+          endsAt: occ.endsAt,
+          url: club ? clubProfileUrl(club.slug) : null,
+          locationText: occ.locationText ?? club?.city ?? null,
+          city: club?.city ?? null,
+          province: club?.region ?? null,
+          isOpenGym: true,
+        }));
+      });
 
     items = [...eventItems, ...gymItems].sort((a, b) =>
       a.startsAt.localeCompare(b.startsAt),

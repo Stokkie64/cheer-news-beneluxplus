@@ -3,18 +3,36 @@
  *
  *   Tier 1 (cheap, high-trust): parse schema.org/Event JSON-LD blocks.
  *   Tier 2 (fallback): Gemini structured extraction from cleaned page text.
+ *                      CURRENTLY DISABLED — see the GEMINI_ENABLED kill-switch.
  *
  * Everything emitted here is funneled through `validateExtractedEvent`
  * (the trust boundary) before it can be returned.
  */
 import { load } from "cheerio";
-import { GoogleGenAI, Type } from "@google/genai";
 import type {
   ExtractedEvent,
   EventType,
   ExtractionMethod,
 } from "@/lib/types";
 import { validateExtractedEvent } from "@/lib/validate";
+
+// ---------------------------------------------------------------------------
+// Gemini / LLM extraction kill-switch
+// ---------------------------------------------------------------------------
+// The Gemini (Tier 2) extraction path is CURRENTLY DISABLED — the project runs
+// JSON-LD only and has NO dependency on a Gemini API key.
+//
+// To re-enable LLM extraction:
+//   1. Set GEMINI_ENABLED = true below (or export GEMINI_ENABLED=true in env).
+//   2. Provide GEMINI_API_KEY (and optionally GEMINI_MODEL) at runtime.
+//   3. Restore the GEMINI_API_KEY / GEMINI_MODEL config blocks in
+//      apphosting.yaml and .github/workflows/aggregate.yml.
+//
+// While disabled, the `@google/genai` SDK is NEVER imported or executed at
+// runtime: the import is dynamic (`await import`) and lives inside the guarded
+// branch below, which is unreachable when the flag is off.
+const GEMINI_ENABLED =
+  process.env.GEMINI_ENABLED === "true"; // default false — Gemini is off.
 
 const JSON_LD_CONFIDENCE = 0.95;
 const LLM_CONFIDENCE = 0.65;
@@ -176,52 +194,59 @@ export function parseJsonLdEvents(
 // ---------------------------------------------------------------------------
 
 /**
- * Gemini response schema (the JSON-Schema SUBSET the API accepts).
+ * Build the Gemini response schema (the JSON-Schema SUBSET the API accepts).
  * Top level is an ARRAY of event OBJECTs. We keep types simple
  * (string/number/boolean/enum) and use `propertyOrdering`.
+ *
+ * `Type` is the enum from `@google/genai`; it is passed in by the caller AFTER
+ * the SDK has been dynamically imported, so this module imports nothing from
+ * `@google/genai` at load time. `Type.X` values are plain string constants
+ * ("ARRAY", "OBJECT", ...), so the shape is identical to the previous literal.
  */
-const GEMINI_RESPONSE_SCHEMA = {
-  type: Type.ARRAY,
-  items: {
-    type: Type.OBJECT,
-    properties: {
-      title: { type: Type.STRING },
-      type: {
-        type: Type.STRING,
-        enum: [
-          "competition",
-          "open_gym",
-          "clinic",
-          "tryout",
-          "showcase",
-          "training",
-          "other",
-        ],
+function buildGeminiResponseSchema(Type: typeof import("@google/genai").Type) {
+  return {
+    type: Type.ARRAY,
+    items: {
+      type: Type.OBJECT,
+      properties: {
+        title: { type: Type.STRING },
+        type: {
+          type: Type.STRING,
+          enum: [
+            "competition",
+            "open_gym",
+            "clinic",
+            "tryout",
+            "showcase",
+            "training",
+            "other",
+          ],
+        },
+        start: { type: Type.STRING, description: "ISO-8601 with UTC offset" },
+        end: { type: Type.STRING, description: "ISO-8601 with offset, or empty" },
+        allDay: { type: Type.BOOLEAN },
+        locationName: { type: Type.STRING },
+        locationAddress: { type: Type.STRING },
+        description: { type: Type.STRING },
+        url: { type: Type.STRING },
+        ticketUrl: { type: Type.STRING },
       },
-      start: { type: Type.STRING, description: "ISO-8601 with UTC offset" },
-      end: { type: Type.STRING, description: "ISO-8601 with offset, or empty" },
-      allDay: { type: Type.BOOLEAN },
-      locationName: { type: Type.STRING },
-      locationAddress: { type: Type.STRING },
-      description: { type: Type.STRING },
-      url: { type: Type.STRING },
-      ticketUrl: { type: Type.STRING },
+      required: ["title", "type", "start"],
+      propertyOrdering: [
+        "title",
+        "type",
+        "start",
+        "end",
+        "allDay",
+        "locationName",
+        "locationAddress",
+        "description",
+        "url",
+        "ticketUrl",
+      ],
     },
-    required: ["title", "type", "start"],
-    propertyOrdering: [
-      "title",
-      "type",
-      "start",
-      "end",
-      "allDay",
-      "locationName",
-      "locationAddress",
-      "description",
-      "url",
-      "ticketUrl",
-    ],
-  },
-} as const;
+  } as const;
+}
 
 interface GeminiRawEvent {
   title?: string;
@@ -296,24 +321,35 @@ function buildPrompt(text: string): string {
  * Tier 2: extract events from cleaned page text via Gemini. Validated before
  * return. Reads GEMINI_API_KEY / GEMINI_MODEL from env at call time (never at
  * import). Returns [] on any error or missing key.
+ *
+ * DISABLED by default: when GEMINI_ENABLED is false (see the kill-switch at the
+ * top of this file) this short-circuits to [] before importing or calling the
+ * `@google/genai` SDK. Re-enable by setting GEMINI_ENABLED=true and providing
+ * GEMINI_API_KEY.
  */
 export async function extractWithGemini(
   text: string,
   sourceUrl: string
 ): Promise<ExtractedEvent[]> {
+  // Kill-switch: Gemini is off — never touch the SDK or the network.
+  if (!GEMINI_ENABLED) return [];
+
   const apiKey = process.env.GEMINI_API_KEY;
   const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   if (!apiKey) return [];
   if (!text.trim()) return [];
 
   try {
+    // Lazy import: the SDK is only loaded when Gemini is enabled AND keyed,
+    // so nothing from `@google/genai` is imported at module load time.
+    const { GoogleGenAI, Type } = await import("@google/genai");
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model,
       contents: buildPrompt(text),
       config: {
         responseMimeType: "application/json",
-        responseSchema: GEMINI_RESPONSE_SCHEMA,
+        responseSchema: buildGeminiResponseSchema(Type),
         temperature: 0,
       },
     });

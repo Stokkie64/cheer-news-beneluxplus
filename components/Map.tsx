@@ -185,12 +185,22 @@ function clusterIcon(cluster: L.MarkerCluster): L.DivIcon {
 }
 
 /**
- * Reveals and focuses a club selected/hovered from outside the map.
+ * Reveals a club highlighted from OUTSIDE the map (e.g. the agenda/calendar
+ * row sync), when its pin is currently buried inside an un-expanded cluster.
  *
- * `zoomToShowLayer` (markercluster) zooms in until the marker is no longer
- * inside a cluster, spiderfying when same-coordinate markers can't be split by
- * zoom — so a buried/stacked pin surfaces and shows its highlight. Falls back
- * to a simple pan if the cluster group/marker isn't ready yet.
+ * Crucially, this must NOT move the camera for pins that are already visible on
+ * the map. Hovering a pin (or a spiderfied leg) updates the focus id, and if we
+ * reacted to that by zooming/panning, the camera would jump on every hover —
+ * the spiderfy-hover bug. So before any camera move we check visibility:
+ * `getVisibleParent(marker) === marker` means the marker is already shown
+ * (standalone or spiderfied) → do nothing. We only reveal when the marker is
+ * hidden (its visible parent is a cluster) or not yet on the map.
+ *
+ * When a reveal is warranted, `zoomToShowLayer` (markercluster) zooms in until
+ * the marker is no longer inside a cluster, spiderfying when same-coordinate
+ * markers can't be split by zoom — so a buried/stacked pin surfaces and shows
+ * its highlight. It can fly in too deep, so we clamp to a city-level zoom in
+ * its callback before gently panning to the pin.
  */
 function FocusHighlight({
   clubs,
@@ -211,10 +221,15 @@ function FocusHighlight({
 
     const group = clusterRef.current;
     const marker = markerRefs.current.get(focusId);
+
     if (group && marker && group.hasLayer(marker)) {
-      // Zoom/spiderfy until this specific marker is visible, then nudge to it.
-      // `zoomToShowLayer` can fly in too deep, so clamp to a city-level zoom in
-      // its callback before panning to the pin.
+      // Already visible on the map (standalone pin or a spiderfied leg)? Then
+      // this focus came from interacting with a pin that's right there — leave
+      // the camera completely alone. This is what kills the spiderfy-hover jump.
+      if (group.getVisibleParent(marker) === marker) return;
+
+      // Otherwise the pin is buried in an un-expanded cluster (agenda→map
+      // reveal): zoom/spiderfy until it surfaces, clamp the zoom, then nudge to it.
       group.zoomToShowLayer(marker, () => {
         if (map.getZoom() > FOCUS_MAX_ZOOM) {
           map.setZoom(FOCUS_MAX_ZOOM);
@@ -223,6 +238,8 @@ function FocusHighlight({
       });
       return;
     }
+
+    // Marker not on the cluster group yet (still mounting): pan toward it.
     map.panTo([club.lat, club.lng], { animate: true });
   }, [focusId, clubs, map, clusterRef, markerRefs]);
   return null;

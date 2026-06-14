@@ -2,15 +2,19 @@
  * Club profile (Server Component, dynamic route).
  *
  * Loads the club by slug (→ notFound on miss), then its teams, upcoming
- * events, and open gyms in parallel. Open gyms are expanded into concrete
- * occurrences over a 90-day window. All reads are wrapped so a missing/empty
- * Firestore degrades to intentional empty states rather than crashing.
+ * events, and recurring sessions in parallel. The `open_gyms` collection holds
+ * BOTH team trainings and public open gyms, split here by `sessionType`:
+ * trainings render as a weekly schedule grouped per team, open gyms as their
+ * weekly pattern — neither is expanded into dated occurrences. All reads are
+ * wrapped so a missing/empty Firestore degrades to intentional empty states
+ * rather than crashing.
  */
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import {
   AtSign,
+  CalendarClock,
   CalendarDays,
   Dumbbell,
   Globe,
@@ -28,23 +32,21 @@ import {
   getPublishedEvents,
   getPublishedOpenGyms,
 } from "@/lib/queries";
-import { expandOpenGym } from "@/lib/recurrence";
 import type {
   ClubClient,
   EventClient,
-  OpenGymOccurrence,
+  OpenGymClient,
   Team,
 } from "@/lib/types";
 import { TeamBadges } from "@/components/TeamBadges";
 import { EventsList } from "@/components/clubs/EventsList";
 import { OpenGymsList } from "@/components/clubs/OpenGymsList";
+import { TrainingTimesList } from "@/components/clubs/TrainingTimesList";
 import { CoachList } from "@/components/clubs/CoachList";
 import { Achievements } from "@/components/clubs/Achievements";
 import { Card } from "@/components/ui/Card";
 
 export const dynamic = "force-dynamic";
-
-const HORIZON_DAYS = 90;
 
 function initials(name: string): string {
   const words = name
@@ -95,11 +97,13 @@ export default async function ClubProfilePage({
   if (!club) notFound();
 
   const now = new Date();
-  const horizon = new Date(now.getTime() + HORIZON_DAYS * 24 * 60 * 60 * 1000);
 
   let teams: Team[] = [];
   let events: EventClient[] = [];
-  let gymOccurrences: OpenGymOccurrence[] = [];
+  // The open_gyms collection mixes team trainings and public open gyms; split
+  // them by sessionType (missing/anything-but-"training" => open gym).
+  let trainings: OpenGymClient[] = [];
+  let openGyms: OpenGymClient[] = [];
 
   try {
     const [teamList, eventList, gymList] = await Promise.all([
@@ -109,9 +113,8 @@ export default async function ClubProfilePage({
     ]);
     teams = teamList.filter((t) => t.status === "active");
     events = eventList;
-    gymOccurrences = gymList
-      .flatMap((gym) => expandOpenGym(gym, now, horizon))
-      .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+    trainings = gymList.filter((g) => g.sessionType === "training");
+    openGyms = gymList.filter((g) => g.sessionType !== "training");
   } catch (err) {
     console.error("[club] related data load failed:", err);
   }
@@ -258,6 +261,10 @@ export default async function ClubProfilePage({
             <TeamBadges teams={teamData} variant="full" />
           </Section>
 
+          <Section icon={CalendarClock} title="Trainingstijden">
+            <TrainingTimesList trainings={trainings} />
+          </Section>
+
           {coaches.length > 0 && (
             <Section icon={Users} title="Coaches">
               <CoachList coaches={coaches} />
@@ -275,7 +282,7 @@ export default async function ClubProfilePage({
           </Section>
 
           <Section icon={Dumbbell} title="Open gyms">
-            <OpenGymsList occurrences={gymOccurrences} />
+            <OpenGymsList openGyms={openGyms} />
           </Section>
         </div>
 

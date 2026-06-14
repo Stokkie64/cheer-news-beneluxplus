@@ -26,7 +26,7 @@
  * list serves the desktop right pane and the mobile "Agenda" tab) and an
  * optional `clubNames` map is accepted to render a clean club line.
  */
-import { useMemo, useRef } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Clock, MapPin, CalendarDays } from "lucide-react";
 import { EVENT_TYPE_COLOR, EVENT_TYPE_LABEL } from "@/lib/eventColors";
@@ -63,12 +63,14 @@ export function Calendar({
   clubNames,
 }: CalendarProps) {
   const router = useRouter();
-  // Single "now" per mount so "Vandaag"/"Morgen" headers are stable across renders.
-  const nowRef = useRef(new Date());
+  // Single "now" per mount so "Vandaag"/"Morgen" headers are stable across
+  // renders. A lazy useState initializer runs exactly once on mount and is a
+  // legitimate render-time value (unlike reading a ref during render).
+  const [now] = useState(() => new Date());
 
   const groups = useMemo(
-    () => buildAgenda(items, nowRef.current),
-    [items],
+    () => buildAgenda(items, now),
+    [items, now],
   );
 
   const focusId = selectedClubId ?? hoveredClubId;

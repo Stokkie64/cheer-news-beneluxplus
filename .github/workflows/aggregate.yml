@@ -1,9 +1,13 @@
 name: Daily aggregation
 
 on:
-  schedule:
-    # 04:17 UTC daily (off-peak; cron rarely fires exactly on the hour).
-    - cron: "17 4 * * *"
+  # Aggregator is PAUSED while Gemini/LLM extraction is disabled. The scheduled
+  # cron is commented out so it does not run on a timer; workflow_dispatch is
+  # kept so it can still be triggered manually (JSON-LD-only) if needed.
+  # To resume the daily run, uncomment the schedule block below.
+  # schedule:
+  #   # 04:17 UTC daily (off-peak; cron rarely fires exactly on the hour).
+  #   - cron: "17 4 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -36,7 +40,10 @@ jobs:
         run: npx tsx scripts/aggregate.ts ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && '--dry-run' || '' }}
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GCP_PROJECT_ID: cheer-news-beneluxplus
-          GEMINI_MODEL: gemini-2.5-flash
+          # Disabled — Gemini not in use. Re-add to enable LLM extraction
+          # (and set GEMINI_ENABLED=true so the extractor uses the key).
+          # GEMINI_ENABLED: "true"
+          # GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # GEMINI_MODEL: gemini-2.5-flash
           MAX_LLM_CALLS_PER_RUN: "40"

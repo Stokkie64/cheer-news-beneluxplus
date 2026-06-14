@@ -44,10 +44,11 @@ env:
     value: cheer-news-beneluxplus
     availability:
       - RUNTIME
-  - variable: GEMINI_MODEL
-    value: gemini-2.5-flash
-    availability:
-      - RUNTIME
+  # Disabled — Gemini not in use. Re-add to enable LLM extraction.
+  # - variable: GEMINI_MODEL
+  #   value: gemini-2.5-flash
+  #   availability:
+  #     - RUNTIME
   - variable: ADMIN_EMAILS
     value: wonnink.jesse@gmail.com
     availability:
@@ -60,10 +61,12 @@ env:
   # Server-only secrets (create with: firebase apphosting:secrets:set <name>).
   # Turnstile is optional — the submission form degrades gracefully without it.
   # Add TURNSTILE_SECRET_KEY / NEXT_PUBLIC_TURNSTILE_SITE_KEY here once configured.
-  - variable: GEMINI_API_KEY
-    secret: gemini-api-key
-    availability:
-      - RUNTIME
+  # Disabled — Gemini not in use. Re-add to enable LLM extraction.
+  # (Also re-grant the secret: firebase apphosting:secrets:grantaccess gemini-api-key)
+  # - variable: GEMINI_API_KEY
+  #   secret: gemini-api-key
+  #   availability:
+  #     - RUNTIME
   # Email notifications (Gmail SMTP) are OFF until configured — the mailer no-ops
   # gracefully without them. To enable, create the secret and re-add these:
   #   firebase apphosting:secrets:set gmail-app-password
