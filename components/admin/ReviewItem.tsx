@@ -1,30 +1,37 @@
 "use client";
 
 /**
- * A single review-queue card: a public submission OR a pending scraped event.
- * Renders the payload as readable key/value rows and exposes Approve / Reject
- * buttons that delegate to the parent's `onAction` (which calls the API).
+ * A single triage card: a public submission OR a pending scraped event.
+ * Renders the payload as readable key/value rows, a free-text note (saved on
+ * blur), and three decision buttons — Onbeslist / Akkoord / Oneens — that move
+ * the card between the board's columns. Choosing a decision does NOT apply or
+ * remove anything; it just records intent for the later batch step.
  */
 import * as React from "react";
-import { Check, Loader2, X } from "lucide-react";
+import { Check, X, CircleDashed } from "lucide-react";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { cn } from "@/lib/utils";
 import { SUBMISSION_KIND_LABEL } from "@/lib/submitSchema";
 import { EVENT_TYPE_LABEL } from "@/lib/eventColors";
-import type { EventClient, SubmissionClient } from "@/lib/types";
+import type {
+  EventClient,
+  SubmissionClient,
+  ReviewDecision,
+} from "@/lib/types";
 
-type Props =
-  | {
-      kind: "submission";
-      submission: SubmissionClient;
-      onAction: (action: "approve" | "reject") => Promise<boolean>;
-    }
-  | {
-      kind: "event";
-      event: EventClient;
-      onAction: (action: "approve" | "reject") => Promise<boolean>;
-    };
+type Decision = ReviewDecision | null;
+
+interface Props {
+  kind: "submission" | "event";
+  submission?: SubmissionClient;
+  event?: EventClient;
+  decision: Decision;
+  note: string;
+  onDecide: (decision: Decision) => void;
+  onNoteChange: (note: string) => void;
+  onNoteSave: (note: string) => void;
+}
 
 /** Render a payload object as label/value rows, skipping empty values. */
 function PayloadRows({ payload }: { payload: Record<string, unknown> }) {
@@ -57,99 +64,106 @@ function formatWhen(iso: string): string {
   }
 }
 
-export function ReviewItem(props: Props) {
-  const [busy, setBusy] = React.useState<null | "approve" | "reject">(null);
-  const [failed, setFailed] = React.useState(false);
+const DECISIONS: {
+  key: Decision;
+  label: string;
+  icon: React.ReactNode;
+  active: string;
+}[] = [
+  {
+    key: null,
+    label: "Onbeslist",
+    icon: <CircleDashed className="size-3.5" aria-hidden />,
+    active: "bg-[var(--surface-2)] text-[var(--ink)] border-[var(--border)]",
+  },
+  {
+    key: "agreed",
+    label: "Akkoord",
+    icon: <Check className="size-3.5" aria-hidden />,
+    active: "bg-emerald-500 text-white border-transparent",
+  },
+  {
+    key: "disagreed",
+    label: "Oneens",
+    icon: <X className="size-3.5" aria-hidden />,
+    active: "bg-[var(--accent)] text-[var(--accent-fg)] border-transparent",
+  },
+];
 
-  async function run(action: "approve" | "reject") {
-    setBusy(action);
-    setFailed(false);
-    const ok = await props.onAction(action);
-    if (!ok) {
-      setFailed(true);
-      setBusy(null);
-    }
-    // On success the parent unmounts this item, so no state reset needed.
-  }
+export function ReviewItem(props: Props) {
+  const { kind, submission, event, decision, note } = props;
 
   const title =
-    props.kind === "submission"
-      ? SUBMISSION_KIND_LABEL[props.submission.kind]
-      : props.event.title;
+    kind === "submission" && submission
+      ? SUBMISSION_KIND_LABEL[submission.kind]
+      : (event?.title ?? "Event");
 
   const meta =
-    props.kind === "submission"
-      ? `Inzending · ${formatWhen(props.submission.createdAt)}`
-      : `Gescraped evenement · ${EVENT_TYPE_LABEL[props.event.type]} · ${formatWhen(
-          props.event.startsAt,
-        )}`;
+    kind === "submission" && submission
+      ? `Inzending · ${formatWhen(submission.createdAt)}`
+      : event
+        ? `Gescraped · ${EVENT_TYPE_LABEL[event.type]} · ${formatWhen(event.startsAt)}`
+        : "";
 
   return (
     <li>
       <Card>
         <CardBody className="flex flex-col gap-3">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-display text-base font-semibold">
-                  {title}
-                </h3>
-                <Badge>
-                  {props.kind === "submission" ? "Inzending" : "Event"}
-                </Badge>
-              </div>
-              <p className="mt-0.5 text-xs text-[var(--muted)]">{meta}</p>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-display text-sm font-semibold">{title}</h3>
+              <Badge>{kind === "submission" ? "Inzending" : "Event"}</Badge>
             </div>
+            <p className="mt-0.5 text-xs text-[var(--muted)]">{meta}</p>
           </div>
 
-          {props.kind === "submission" ? (
-            <PayloadRows payload={props.submission.payload} />
-          ) : (
+          {kind === "submission" && submission ? (
+            <PayloadRows payload={submission.payload} />
+          ) : event ? (
             <PayloadRows
               payload={{
-                titel: props.event.title,
-                type: EVENT_TYPE_LABEL[props.event.type],
-                start: formatWhen(props.event.startsAt),
-                locatie: props.event.locationText,
-                url: props.event.url,
-                omschrijving: props.event.description,
-                confidence: props.event.confidence,
+                titel: event.title,
+                type: EVENT_TYPE_LABEL[event.type],
+                start: formatWhen(event.startsAt),
+                locatie: event.locationText,
+                url: event.url,
+                omschrijving: event.description,
               }}
             />
-          )}
+          ) : null}
 
-          {failed && (
-            <p className="text-xs text-[var(--accent)]">
-              Actie mislukt. Probeer het opnieuw.
-            </p>
-          )}
+          {/* Note */}
+          <textarea
+            value={note}
+            onChange={(e) => props.onNoteChange(e.target.value)}
+            onBlur={(e) => props.onNoteSave(e.target.value)}
+            placeholder="Notitie (optioneel)…"
+            rows={2}
+            className="w-full resize-y rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+          />
 
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              onClick={() => void run("approve")}
-              disabled={busy !== null}
-            >
-              {busy === "approve" ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden />
-              ) : (
-                <Check className="size-4" aria-hidden />
-              )}
-              Goedkeuren
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => void run("reject")}
-              disabled={busy !== null}
-            >
-              {busy === "reject" ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden />
-              ) : (
-                <X className="size-4" aria-hidden />
-              )}
-              Afwijzen
-            </Button>
+          {/* Decision buttons */}
+          <div className="flex flex-wrap gap-1.5">
+            {DECISIONS.map((d) => {
+              const isActive = decision === d.key;
+              return (
+                <button
+                  key={String(d.key)}
+                  type="button"
+                  aria-pressed={isActive}
+                  onClick={() => props.onDecide(d.key)}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                    isActive
+                      ? d.active
+                      : "border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
+                  )}
+                >
+                  {d.icon}
+                  {d.label}
+                </button>
+              );
+            })}
           </div>
         </CardBody>
       </Card>
