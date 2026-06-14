@@ -36,12 +36,28 @@ gcloud projects add-iam-policy-binding cheer-news-beneluxplus \
    hard-code them.)
 4. The allowlist of admin emails is `ADMIN_EMAILS` (set in `apphosting.yaml` / `.env.local`).
 
+## Gemini / LLM extraction — currently DISABLED
+
+Gemini-based (Tier 2) event extraction is turned off via a kill-switch (`GEMINI_ENABLED`,
+default `false`, in `lib/extract.ts` and `scripts/aggregate.ts`). The app builds and deploys
+with **no `gemini-api-key` secret** and the aggregator runs JSON-LD only. The
+`GEMINI_API_KEY` / `GEMINI_MODEL` blocks in `apphosting.yaml` and the workflow are commented out.
+
+To re-enable LLM extraction:
+1. Set `GEMINI_ENABLED=true` and provide `GEMINI_API_KEY` (env / Secret Manager).
+2. Uncomment the `GEMINI_API_KEY` + `GEMINI_MODEL` blocks in `apphosting.yaml` and
+   re-grant the secret: `npx firebase-tools apphosting:secrets:grantaccess gemini-api-key`.
+3. Uncomment the `GEMINI_*` env in `.github/workflows/aggregate.yml` (and the `schedule:` block
+   to resume the daily cron).
+
 ## Daily aggregation
 
-Runs automatically via `.github/workflows/aggregate.yml` (cron `17 4 * * *` UTC) using the
-`FIREBASE_SERVICE_ACCOUNT` + `GEMINI_API_KEY` repo secrets. Trigger manually from the Actions tab
-(**Daily aggregation** → Run workflow → optional dry-run). The `MAX_LLM_CALLS_PER_RUN=40` guard
-keeps usage under the Gemini free-tier quota; HTTP 429s are surfaced distinctly in the run summary.
+Scheduled run is **PAUSED** (the cron in `.github/workflows/aggregate.yml` is commented out)
+while Gemini is disabled. The workflow can still be triggered manually from the Actions tab
+(**Daily aggregation** → Run workflow → optional dry-run); it uses the `FIREBASE_SERVICE_ACCOUNT`
+repo secret and extracts JSON-LD only. The `MAX_LLM_CALLS_PER_RUN=40` guard (kept intact but inert
+while Gemini is off) keeps usage under the Gemini free-tier quota when re-enabled; HTTP 429s are
+surfaced distinctly in the run summary.
 
 ## Notes
 

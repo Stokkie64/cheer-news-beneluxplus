@@ -30,6 +30,13 @@ import type { ExtractedEvent, PublishStatus } from "../lib/types";
 import { EXTRACTOR_VERSION } from "../lib/types";
 
 const DRY_RUN = process.argv.includes("--dry-run");
+/**
+ * Gemini / LLM extraction kill-switch (mirrors lib/extract.ts). DISABLED by
+ * default: the pipeline runs JSON-LD only and needs NO GEMINI_API_KEY. To
+ * re-enable, set GEMINI_ENABLED=true (and provide GEMINI_API_KEY) — the
+ * MAX_LLM_CALLS budget logic below is kept intact but stays inert while off.
+ */
+const GEMINI_ENABLED = process.env.GEMINI_ENABLED === "true";
 /** Max Gemini calls per run — keep safely below the free-tier daily quota. */
 const MAX_LLM_CALLS = Number(process.env.MAX_LLM_CALLS_PER_RUN ?? 40);
 /** Confidence at/above which a scraped event auto-publishes; below goes to review. */
@@ -91,6 +98,9 @@ async function main() {
   };
 
   console.log(`[aggregate] start ${DRY_RUN ? "(DRY RUN)" : ""} extractorVersion=${EXTRACTOR_VERSION}`);
+  if (!GEMINI_ENABLED) {
+    console.log("[aggregate] Gemini disabled — JSON-LD only");
+  }
 
   // Build slug -> club lookup for clubId resolution + city coords.
   const clubsSnap = await adminDb.collection("clubs").get();
@@ -131,8 +141,10 @@ async function main() {
     }
 
     // ---- Extract: JSON-LD first, Gemini fallback within budget ----
+    // When Gemini is disabled the LLM fallback is skipped entirely (no budget
+    // accounting, no SDK call); extraction is JSON-LD only.
     let raw: ExtractedEvent[] = parseJsonLdEvents(html, sourceUrl);
-    if (raw.length === 0) {
+    if (GEMINI_ENABLED && raw.length === 0) {
       if (stats.llmCalls >= MAX_LLM_CALLS) {
         console.warn(`[budget] LLM cap (${MAX_LLM_CALLS}) reached — skipping Gemini for ${sourceUrl}`);
       } else {

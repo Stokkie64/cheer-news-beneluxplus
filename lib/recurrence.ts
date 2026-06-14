@@ -183,6 +183,85 @@ export function expandOpenGym(
   return occurrences;
 }
 
+/** iCal BYDAY token → {Dutch weekday name, Monday-based index 0..6}. */
+const BYDAY_TO_NL: Record<string, { weekday: string; weekdayIndex: number }> = {
+  MO: { weekday: "Maandag", weekdayIndex: 0 },
+  TU: { weekday: "Dinsdag", weekdayIndex: 1 },
+  WE: { weekday: "Woensdag", weekdayIndex: 2 },
+  TH: { weekday: "Donderdag", weekdayIndex: 3 },
+  FR: { weekday: "Vrijdag", weekdayIndex: 4 },
+  SA: { weekday: "Zaterdag", weekdayIndex: 5 },
+  SU: { weekday: "Zondag", weekdayIndex: 6 },
+};
+
+/** A single weekly recurring slot for display (no concrete date). */
+export interface WeeklySlot {
+  weekdayIndex: number; // 0 = Monday .. 6 = Sunday
+  weekday: string; // Dutch weekday name, e.g. "Maandag"
+  startTime: string; // local "HH:mm"
+  endTime: string; // local "HH:mm"
+}
+
+/**
+ * Turn a weekly-recurring open gym/training into display slots — one per BYDAY
+ * day — WITHOUT expanding into concrete dated occurrences.
+ *
+ * Returns [] when the doc has no rrule, a non-weekly rrule, or no BYDAY days.
+ * A doc may list multiple BYDAY days (e.g. "FREQ=WEEKLY;BYDAY=MO,WE"); each
+ * yields its own slot. Slots are sorted by weekday then start time.
+ */
+export function weeklySlots(gym: OpenGymClient): WeeklySlot[] {
+  if (!gym.rrule) return [];
+
+  let parsed: ReturnType<typeof RRule.parseString>;
+  try {
+    parsed = RRule.parseString(gym.rrule);
+  } catch {
+    return [];
+  }
+  if (parsed.freq !== RRule.WEEKLY) return [];
+
+  // Normalize byweekday into a set of BYDAY tokens (MO..SU).
+  const days = Array.isArray(parsed.byweekday)
+    ? parsed.byweekday
+    : parsed.byweekday != null
+      ? [parsed.byweekday]
+      : [];
+
+  const slots: WeeklySlot[] = [];
+  const seen = new Set<string>();
+  for (const day of days) {
+    // rrule may give us a Weekday instance, a number (0=Mon), or a string.
+    let token: string | undefined;
+    if (typeof day === "number") {
+      token = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"][day];
+    } else if (typeof day === "string") {
+      token = day.toUpperCase().slice(0, 2);
+    } else if (day && typeof day === "object" && "weekday" in day) {
+      token = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"][
+        (day as Weekday).weekday
+      ];
+    }
+    if (!token) continue;
+    const nl = BYDAY_TO_NL[token];
+    if (!nl || seen.has(token)) continue;
+    seen.add(token);
+    slots.push({
+      weekdayIndex: nl.weekdayIndex,
+      weekday: nl.weekday,
+      startTime: gym.startTime,
+      endTime: gym.endTime,
+    });
+  }
+
+  slots.sort(
+    (a, b) =>
+      a.weekdayIndex - b.weekdayIndex ||
+      a.startTime.localeCompare(b.startTime),
+  );
+  return slots;
+}
+
 /** Add `n` days to a YYYY-MM-DD key (calendar arithmetic, no tz needed). */
 function addDays(dayKey: string, n: number): string {
   const [y, m, d] = dayKey.split("-").map((x) => Number.parseInt(x, 10));

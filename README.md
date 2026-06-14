@@ -12,7 +12,9 @@ review-wachtrij (`/admin`) voordat ze publiek worden.
 
 - **Next.js 16** (App Router, SSR) + **TypeScript** + **Tailwind v4**
 - **Firebase**: Firestore (data) + Firebase Auth (admin) + **App Hosting** (SSR deploy)
-- **Gemini** (`gemini-2.5-flash`) for structured event extraction
+- **Gemini** (`gemini-2.5-flash`) for structured event extraction — **currently DISABLED**
+  (kill-switch in `lib/extract.ts`); the pipeline runs JSON-LD only and needs no Gemini key.
+  Re-enable with `GEMINI_ENABLED=true` + a `GEMINI_API_KEY` (and restore the config blocks).
 - **GitHub Actions** daily cron runs the aggregator
 - Map: `react-leaflet` + OpenStreetMap · Calendar: FullCalendar · Geocoding: Nominatim
 

@@ -1,0 +1,59 @@
+name: CI
+
+# Quality gate for every PR and pushes to the long-lived branches.
+# Hard gates (fail the run): lint, typecheck, test.
+# Informational (continue-on-error): format drift, npm audit, next build —
+# these are signal without blocking merges while the repo is being cleaned up.
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
+      # --- Hard gates -------------------------------------------------------
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      # --- Informational (do not block) ------------------------------------
+      - name: Format check
+        run: npm run format:check
+        continue-on-error: true
+
+      - name: Dependency audit
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+      - name: Build
+        run: npm run build
+        continue-on-error: true
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
