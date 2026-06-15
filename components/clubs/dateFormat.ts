@@ -3,7 +3,7 @@
  * so club pages and the home agenda use one formatting stack.
  */
 export {
-  formatNlDate,
-  formatNlTime,
-  formatNlDateTimeRange,
+  formatDate,
+  formatTime,
+  formatDateTimeRange,
 } from "@/lib/dateFormat";

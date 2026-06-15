@@ -31,7 +31,9 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Clock, MapPin, CalendarDays, ArrowRight, ExternalLink } from "lucide-react";
-import { EVENT_TYPE_COLOR, EVENT_TYPE_LABEL } from "@/lib/eventColors";
+import { EVENT_TYPE_COLOR } from "@/lib/eventColors";
+import { useI18n } from "@/lib/i18n/context";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { cn } from "@/lib/utils";
 import type { CalendarItem } from "@/components/home/types";
 import { buildAgenda, type AgendaRow } from "@/components/home/agenda";
@@ -57,8 +59,8 @@ interface CalendarProps {
  * since we render the type label and club name separately, strip that prefix to
  * a plain "Open gym" so the title column isn't redundant.
  */
-function displayTitle(item: CalendarItem): string {
-  if (item.isOpenGym) return EVENT_TYPE_LABEL.open_gym;
+function displayTitle(item: CalendarItem, t: Dictionary): string {
+  if (item.isOpenGym) return t.eventType.open_gym;
   return item.title;
 }
 
@@ -71,12 +73,27 @@ export function Calendar({
   onHoverItem,
   clubNames,
 }: CalendarProps) {
+  const { t, locale } = useI18n();
   // Single "now" per mount so "Vandaag"/"Morgen" headers are stable across
   // renders. A lazy useState initializer runs exactly once on mount and is a
   // legitimate render-time value (unlike reading a ref during render).
   const [now] = useState(() => new Date());
 
-  const groups = useMemo(() => buildAgenda(items, now), [items, now]);
+  const groups = useMemo(
+    () =>
+      buildAgenda(
+        items,
+        now,
+        {
+          today: t.agenda.today,
+          tomorrow: t.agenda.tomorrow,
+          allDay: t.agenda.allDay,
+          until: t.agenda.until,
+        },
+        locale,
+      ),
+    [items, now, t, locale],
+  );
 
   const focusId = selectedClubId ?? hoveredClubId;
 
@@ -87,10 +104,10 @@ export function Calendar({
           <CalendarDays className="size-5" aria-hidden />
         </span>
         <p className="font-display text-sm font-semibold text-[var(--ink)]">
-          Geen evenementen
+          {t.agenda.emptyTitle}
         </p>
         <p className="max-w-xs text-xs text-[var(--muted)]">
-          Geen evenementen in deze periode of met deze filters.
+          {t.agenda.emptyHint}
         </p>
       </div>
     );
@@ -117,6 +134,7 @@ export function Calendar({
                   row={row}
                   focusId={focusId}
                   clubNames={clubNames}
+                  t={t}
                   onHover={onHover}
                   onSelect={onSelect}
                   onHoverItem={onHoverItem}
@@ -131,17 +149,18 @@ export function Calendar({
 }
 
 /** Button label for the "go to page" link, tailored to where the url points. */
-function linkLabel(url: string): string {
-  if (url.startsWith("/clubs/")) return "Bekijk club";
-  if (url.startsWith("/coaches")) return "Bekijk coach";
-  if (url.startsWith("/")) return "Meer info";
-  return "Website";
+function linkLabel(url: string, t: Dictionary): string {
+  if (url.startsWith("/clubs/")) return t.agenda.viewClub;
+  if (url.startsWith("/coaches")) return t.agenda.viewCoach;
+  if (url.startsWith("/")) return t.agenda.moreInfo;
+  return t.agenda.website;
 }
 
 function AgendaRowItem({
   row,
   focusId,
   clubNames,
+  t,
   onHover,
   onSelect,
   onHoverItem,
@@ -149,6 +168,7 @@ function AgendaRowItem({
   row: AgendaRow;
   focusId: string | null;
   clubNames?: Record<string, string>;
+  t: Dictionary;
   onHover: (id: string | null) => void;
   onSelect: (id: string | null) => void;
   onHoverItem?: (id: string | null) => void;
@@ -193,7 +213,7 @@ function AgendaRowItem({
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span className="truncate text-sm font-semibold text-[var(--ink)]">
-            {displayTitle(item)}
+            {displayTitle(item, t)}
           </span>
           {row.count > 1 && (
             <span className="shrink-0 rounded-full bg-[var(--surface-2)] px-1.5 text-[0.65rem] font-semibold tabular-nums text-[var(--muted)]">
@@ -203,7 +223,7 @@ function AgendaRowItem({
         </div>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--muted)]">
           <span className="font-medium" style={{ color }}>
-            {EVENT_TYPE_LABEL[item.type]}
+            {t.eventType[item.type]}
           </span>
           {clubName && (
             <>
@@ -265,7 +285,7 @@ function AgendaRowItem({
         <button
           type="button"
           onClick={() => onSelect(item.clubId)}
-          aria-label={`${displayTitle(item)} — toon locatie op de kaart`}
+          aria-label={t.agenda.showOnMap(displayTitle(item, t))}
           className={bodyClass}
         >
           {content}
@@ -279,9 +299,12 @@ function AgendaRowItem({
           <Link
             href={linkHref}
             className={linkClass}
-            aria-label={`${displayTitle(item)} — ${linkLabel(linkHref)}`}
+            aria-label={t.agenda.rowLink(
+              displayTitle(item, t),
+              linkLabel(linkHref, t),
+            )}
           >
-            {linkLabel(linkHref)}
+            {linkLabel(linkHref, t)}
             <ArrowRight className="size-3.5" aria-hidden />
           </Link>
         ) : (
@@ -290,9 +313,12 @@ function AgendaRowItem({
             target="_blank"
             rel="noopener noreferrer"
             className={linkClass}
-            aria-label={`${displayTitle(item)} — ${linkLabel(linkHref)} (externe link)`}
+            aria-label={t.agenda.rowLink(
+              displayTitle(item, t),
+              t.agenda.externalSuffix(linkLabel(linkHref, t)),
+            )}
           >
-            {linkLabel(linkHref)}
+            {linkLabel(linkHref, t)}
             <ExternalLink className="size-3.5" aria-hidden />
           </a>
         ))}

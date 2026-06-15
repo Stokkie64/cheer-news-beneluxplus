@@ -59,6 +59,7 @@ import { TrainingTimesList } from "@/components/clubs/TrainingTimesList";
 import { CoachList } from "@/components/clubs/CoachList";
 import { Achievements } from "@/components/clubs/Achievements";
 import { Card } from "@/components/ui/Card";
+import { dictionaryFor, getDictionary, getLocale } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +79,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  const t = await getDictionary();
   let club: ClubClient | null = null;
   try {
     club = await getClubBySlug(slug);
@@ -85,12 +87,10 @@ export async function generateMetadata({
     club = null;
   }
   if (!club) {
-    return { title: "Club niet gevonden" };
+    return { title: t.club.notFoundTitle };
   }
   const title = club.city ? `${club.name} — ${club.city}` : club.name;
-  const description =
-    club.blurb ??
-    `Cheerleadingclub ${club.name}${club.city ? ` uit ${club.city}` : ""}: teams, evenementen en open gyms.`;
+  const description = club.blurb ?? t.club.metaFallback(club.name, club.city);
   return { title, description };
 }
 
@@ -100,6 +100,8 @@ export default async function ClubProfilePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  const locale = await getLocale();
+  const t = dictionaryFor(locale);
 
   let club: ClubClient | null = null;
   try {
@@ -200,7 +202,7 @@ export default async function ClubProfilePage({
           href="/clubs"
           className="text-[var(--muted)] hover:text-[var(--ink)]"
         >
-          ← Terug naar clubgids
+          {t.club.backToClubs}
         </Link>
       </nav>
 
@@ -237,7 +239,7 @@ export default async function ClubProfilePage({
                 {club.city}
               </span>
             )}
-            {club.foundedYear && <span>Opgericht in {club.foundedYear}</span>}
+            {club.foundedYear && <span>{t.club.founded(club.foundedYear)}</span>}
           </div>
 
           {socials.length > 0 && (
@@ -280,32 +282,32 @@ export default async function ClubProfilePage({
       <div className="mt-10 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_18rem]">
         {/* Main column */}
         <div className="flex flex-col gap-10">
-          <Section icon={Users} title="Teams">
-            <TeamBadges teams={teamData} variant="full" />
+          <Section icon={Users} title={t.club.sectionTeams}>
+            <TeamBadges teams={teamData} t={t} variant="full" />
           </Section>
 
-          <Section icon={CalendarClock} title="Trainingstijden">
-            <TrainingTimesList trainings={trainings} />
+          <Section icon={CalendarClock} title={t.club.sectionTrainingTimes}>
+            <TrainingTimesList trainings={trainings} t={t} />
           </Section>
 
           {coaches.length > 0 && (
-            <Section icon={Users} title="Coaches">
+            <Section icon={Users} title={t.club.sectionCoaches}>
               <CoachList coaches={coaches} />
             </Section>
           )}
 
           {achievements.length > 0 && (
-            <Section icon={Trophy} title="Prestaties">
+            <Section icon={Trophy} title={t.club.sectionAchievements}>
               <Achievements achievements={achievements} />
             </Section>
           )}
 
-          <Section icon={CalendarDays} title="Aankomende evenementen">
-            <EventsList events={events} />
+          <Section icon={CalendarDays} title={t.club.sectionUpcoming}>
+            <EventsList events={events} t={t} locale={locale} />
           </Section>
 
-          <Section icon={DoorOpen} title="Open gyms">
-            <OpenGymsList openGyms={openGyms} />
+          <Section icon={DoorOpen} title={t.club.sectionOpenGyms}>
+            <OpenGymsList openGyms={openGyms} t={t} />
           </Section>
         </div>
 
@@ -314,7 +316,7 @@ export default async function ClubProfilePage({
           <Card className="p-5">
             <h2 className="mb-4 flex items-center gap-2 font-display text-lg font-bold text-[var(--ink)]">
               <MapPin className="size-4.5 text-[var(--muted)]" aria-hidden />
-              Praktisch
+              {t.club.practical}
             </h2>
 
             {hasPractical ? (
@@ -327,7 +329,7 @@ export default async function ClubProfilePage({
                     />
                     <div className="min-w-0">
                       <dt className="font-medium text-[var(--ink)]">
-                        Trainingslocatie
+                        {t.club.trainingLocation}
                       </dt>
                       <dd className="text-[var(--muted)]">
                         {club.trainingLocation}
@@ -343,7 +345,9 @@ export default async function ClubProfilePage({
                       aria-hidden
                     />
                     <div className="min-w-0">
-                      <dt className="font-medium text-[var(--ink)]">Adres</dt>
+                      <dt className="font-medium text-[var(--ink)]">
+                        {t.club.address}
+                      </dt>
                       <dd>
                         <address className="not-italic text-[var(--muted)]">
                           {club.address && (
@@ -365,7 +369,9 @@ export default async function ClubProfilePage({
                       aria-hidden
                     />
                     <div className="min-w-0">
-                      <dt className="font-medium text-[var(--ink)]">Contact</dt>
+                      <dt className="font-medium text-[var(--ink)]">
+                        {t.club.contact}
+                      </dt>
                       <dd>
                         <a
                           href={`mailto:${contactEmail}`}
@@ -380,7 +386,7 @@ export default async function ClubProfilePage({
               </dl>
             ) : (
               <p className="text-sm text-[var(--muted)]">
-                Praktische gegevens nog niet bekend
+                {t.club.noPractical}
               </p>
             )}
 
@@ -392,7 +398,7 @@ export default async function ClubProfilePage({
                 className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-[var(--secondary)] hover:underline"
               >
                 <MapPin className="size-3.5" aria-hidden />
-                Bekijk op de kaart
+                {t.club.viewOnMap}
               </a>
             )}
           </Card>

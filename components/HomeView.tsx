@@ -26,6 +26,7 @@ import { Calendar } from "@/components/Calendar";
 import { Filters } from "@/components/Filters";
 import { RESET_HOME_EVENT } from "@/components/HomeNavLink";
 import { EmptyState } from "@/components/home/EmptyState";
+import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 import { dayKey } from "@/lib/dateFormat";
 import type {
@@ -70,6 +71,7 @@ export function HomeView({
   coaches: MapCoach[];
   items: CalendarItem[];
 }) {
+  const { t } = useI18n();
   const [filters, setFilters] = useState<HomeFilters>(EMPTY_FILTERS);
   const [hoveredClubId, setHoveredClubId] = useState<string | null>(null);
   const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
@@ -181,8 +183,8 @@ export function HomeView({
     ) : (
       <EmptyState
         icon={MapIcon}
-        title="Nog geen clubs op de kaart"
-        hint="Zodra clubs met een locatie zijn toegevoegd, verschijnen ze hier als pins."
+        title={t.home.emptyMap.title}
+        hint={t.home.emptyMap.hint}
       />
     );
 
@@ -209,8 +211,8 @@ export function HomeView({
   ) : (
     <EmptyState
       icon={CalendarDays}
-      title="Nog geen evenementen"
-      hint="Wedstrijden, open gyms en workshops verschijnen hier zodra ze bekend zijn."
+      title={t.home.emptyAgenda.title}
+      hint={t.home.emptyAgenda.hint}
     />
   );
 
@@ -224,13 +226,13 @@ export function HomeView({
           active={tab === "map"}
           onClick={() => setTab("map")}
           icon={<MapIcon className="size-4" aria-hidden />}
-          label="Kaart"
+          label={t.home.mobileTab.map}
         />
         <TabButton
           active={tab === "calendar"}
           onClick={() => setTab("calendar")}
           icon={<CalendarDays className="size-4" aria-hidden />}
-          label="Agenda"
+          label={t.home.mobileTab.agenda}
         />
       </div>
 
@@ -243,7 +245,7 @@ export function HomeView({
             "h-[calc(100dvh-3.5rem-3rem)] md:h-[calc(100dvh-3.5rem)]",
             tab === "map" ? "block" : "hidden md:block",
           )}
-          aria-label="Kaart van cheerleadingclubs"
+          aria-label={t.home.mapAriaLabel}
         >
           {mapPanel}
         </section>
@@ -255,7 +257,7 @@ export function HomeView({
             "h-[calc(100dvh-3.5rem-3rem)] md:h-[calc(100dvh-3.5rem)]",
             tab === "calendar" ? "block" : "hidden md:block",
           )}
-          aria-label="Agenda van evenementen"
+          aria-label={t.home.agendaAriaLabel}
         >
           {calendarPanel}
         </section>
