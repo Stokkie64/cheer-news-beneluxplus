@@ -29,10 +29,18 @@ export interface AdminUser {
  * Verify a Firebase ID token and confirm the user is an allowlisted admin.
  * Returns the user on success, or null on any failure (invalid token, not allowlisted).
  */
-export async function verifyAdmin(idToken: string | undefined): Promise<AdminUser | null> {
+export async function verifyAdmin(
+  idToken: string | undefined,
+): Promise<AdminUser | null> {
   if (!idToken) return null;
   try {
     const decoded = await adminAuth.verifyIdToken(idToken);
+    // Reject tokens whose email the provider did not confirm. Without this,
+    // anyone who can mint a token asserting an unverified admin email (e.g. via
+    // an enabled email/password provider) would pass the allowlist check below
+    // and gain full admin. Google sign-in always sets email_verified:true, so
+    // this never rejects a legitimate admin — it only closes the spoof path.
+    if (!decoded.email_verified) return null;
     if (!isAdminEmail(decoded.email)) return null;
     return { uid: decoded.uid, email: decoded.email! };
   } catch {
@@ -64,7 +72,9 @@ export async function verifyUser(
 }
 
 /** Extract a bearer token from an Authorization header value. */
-export function bearerToken(authHeader: string | null | undefined): string | undefined {
+export function bearerToken(
+  authHeader: string | null | undefined,
+): string | undefined {
   if (!authHeader) return undefined;
   const m = /^Bearer\s+(.+)$/i.exec(authHeader);
   return m?.[1];

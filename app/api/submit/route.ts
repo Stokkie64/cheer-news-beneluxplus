@@ -19,7 +19,6 @@ import { adminDb } from "@/lib/firebaseAdmin";
 import { COLLECTIONS } from "@/lib/queries";
 import { submissionInputSchema } from "@/lib/submitSchema";
 import { bearerToken, verifyUser } from "@/lib/auth";
-import { sendSubmissionNotification } from "@/lib/mailer";
 
 export const runtime = "nodejs";
 
@@ -72,7 +71,10 @@ function hashIp(ip: string): string {
   return createHash("sha256").update(`${ip}:${ipHashSalt()}`).digest("hex");
 }
 
-async function verifyTurnstile(token: string | undefined, ip: string): Promise<boolean> {
+async function verifyTurnstile(
+  token: string | undefined,
+  ip: string,
+): Promise<boolean> {
   const secret = process.env.TURNSTILE_SECRET_KEY;
   if (!secret) return true; // Not configured (dev) → skip verification.
   if (!token) return false;
@@ -98,11 +100,17 @@ export async function POST(req: Request) {
   try {
     body = (await req.json()) as Record<string, unknown>;
   } catch {
-    return NextResponse.json({ ok: false, error: "Ongeldige aanvraag" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "Ongeldige aanvraag" },
+      { status: 400 },
+    );
   }
 
   // 2. Honeypot — pretend success so bots don't learn they were caught.
-  if (typeof body[HONEYPOT_FIELD] === "string" && body[HONEYPOT_FIELD].trim() !== "") {
+  if (
+    typeof body[HONEYPOT_FIELD] === "string" &&
+    body[HONEYPOT_FIELD].trim() !== ""
+  ) {
     return NextResponse.json({ ok: true });
   }
 
@@ -136,7 +144,10 @@ export async function POST(req: Request) {
   const human = await verifyTurnstile(turnstileToken, ip);
   if (!human) {
     return NextResponse.json(
-      { ok: false, error: "Verificatie mislukt. Vernieuw de pagina en probeer opnieuw." },
+      {
+        ok: false,
+        error: "Verificatie mislukt. Vernieuw de pagina en probeer opnieuw.",
+      },
       { status: 400 },
     );
   }
@@ -154,6 +165,11 @@ export async function POST(req: Request) {
   const { kind, ...payload } = parsed.data;
 
   // 7. Persist as a pending submission.
+  //
+  // Maintainers are NOT emailed here. Instead `digestNotifiedAt: null` marks
+  // this row as "not yet reported"; a once-daily evening job
+  // (scripts/notify-digest.ts) collects all un-notified rows into ONE digest
+  // email and stamps them, so a busy day is one mail, not one-per-submission.
   try {
     const ref = await adminDb.collection(COLLECTIONS.submissions).add({
       kind,
@@ -164,20 +180,9 @@ export async function POST(req: Request) {
       ipHash: hashIp(ip),
       submittedByEmail: user.email,
       submittedByUid: user.uid,
+      digestNotifiedAt: null,
       createdAt: FieldValue.serverTimestamp(),
     });
-
-    // Notify maintainers. Never let a mail failure fail the request.
-    try {
-      await sendSubmissionNotification({
-        kind,
-        payload,
-        submittedByEmail: user.email,
-        id: ref.id,
-      });
-    } catch (mailErr) {
-      console.error("[api/submit] notification failed:", mailErr);
-    }
 
     return NextResponse.json({ ok: true, id: ref.id });
   } catch (err) {
