@@ -409,14 +409,41 @@ function ResetView({ signal }: { signal: number }) {
   return null;
 }
 
+/**
+ * Pans to a hover-revealed event/coach pin ONLY when it sits outside the current
+ * view, so the revealed pin is always visible without yanking the camera around
+ * for pins already on screen. Zoom is never changed (a calm nudge, not a fly-in).
+ */
+function RevealPan({ point }: { point: { lat: number; lng: number } | null }) {
+  const map = useMap();
+  const lat = point?.lat ?? null;
+  const lng = point?.lng ?? null;
+  useEffect(() => {
+    if (lat == null || lng == null) return;
+    if (map.getBounds().contains([lat, lng])) return;
+    map.panTo([lat, lng], { animate: true });
+  }, [lat, lng, map]);
+  return null;
+}
+
 interface MapProps {
   clubs: MapClub[];
   /** Club-independent open-gym venues, rendered as a distinct pin layer. */
   venues?: MapVenue[];
-  /** Located events, rendered as diamond pins colored by type. */
+  /**
+   * Located events — candidates for a hover-revealed pin. Events have NO
+   * persistent pin; only the one whose id matches `activeEventId` is shown.
+   */
   events?: MapEvent[];
-  /** Visiting coaches, rendered as amber teardrop pins. */
+  /** Visiting coaches. Like events, only the `activeEventId` match is shown. */
   coaches?: MapCoach[];
+  /**
+   * The agenda row currently hovered (`event:{id}` / `coach:{id}`). Reveals the
+   * matching event or coach as a single standalone pin (kept out of the cluster
+   * group so it never gets swallowed into a count badge), panning to it only if
+   * it sits off-screen.
+   */
+  activeEventId?: string | null;
   hoveredClubId: string | null;
   selectedClubId: string | null;
   onHover: (id: string | null) => void;
@@ -430,6 +457,7 @@ export default function Map({
   venues = [],
   events = [],
   coaches = [],
+  activeEventId = null,
   hoveredClubId,
   selectedClubId,
   onHover,
@@ -482,6 +510,17 @@ export default function Map({
   // never move the map — it only restyles the matching pin. Hovering an agenda
   // event highlights the pin without moving the camera.
   const focusId = selectedClubId;
+
+  // The single event/coach revealed by hovering its agenda row (if any). Kept
+  // out of the cluster group below so a lone pin never collapses into a badge.
+  const activeEvent = useMemo(
+    () => events.find((e) => e.id === activeEventId) ?? null,
+    [events, activeEventId],
+  );
+  const activeCoach = useMemo(
+    () => coaches.find((c) => c.id === activeEventId) ?? null,
+    [coaches, activeEventId],
+  );
 
   return (
     <>
@@ -538,17 +577,21 @@ export default function Map({
           {venues.map((venue) => (
             <VenueMarker key={venue.id} venue={venue} icon={venueMarkerIcon} />
           ))}
-          {events.map((event) => (
-            <EventMarker
-              key={event.id}
-              event={event}
-              icon={eventIcons[event.type]}
-            />
-          ))}
-          {coaches.map((coach) => (
-            <CoachMarker key={coach.id} coach={coach} icon={coachMarkerIcon} />
-          ))}
         </MarkerClusterGroup>
+
+        {/* Hover-revealed event / coach pin. Rendered OUTSIDE the cluster group
+            (so a single pin can't be swallowed into a count badge) and only
+            while its agenda row is hovered. */}
+        {activeEvent && (
+          <EventMarker
+            event={activeEvent}
+            icon={eventIcons[activeEvent.type]}
+          />
+        )}
+        {activeCoach && (
+          <CoachMarker coach={activeCoach} icon={coachMarkerIcon} />
+        )}
+        <RevealPan point={activeEvent ?? activeCoach} />
       </MapContainer>
     </>
   );
@@ -643,10 +686,13 @@ function formatEventWhen(event: MapEvent): string {
 function EventMarker({ event, icon }: { event: MapEvent; icon: L.DivIcon }) {
   return (
     <Marker position={[event.lat, event.lng]} icon={icon} riseOnHover>
+      {/* Permanent: the pin is revealed from an agenda-row hover, so the cursor
+          is on the agenda — a hover-only tooltip would never show. */}
       <Tooltip
         direction="top"
         offset={[0, -14]}
         opacity={1}
+        permanent
         className="cheer-tooltip"
       >
         {event.title}
@@ -741,10 +787,12 @@ function CoachMarker({ coach, icon }: { coach: MapCoach; icon: L.DivIcon }) {
 
   return (
     <Marker position={[coach.lat, coach.lng]} icon={icon} riseOnHover>
+      {/* Permanent: revealed from a hover elsewhere, so show the label at once. */}
       <Tooltip
         direction="top"
         offset={[0, -30]}
         opacity={1}
+        permanent
         className="cheer-tooltip"
       >
         {coach.name}

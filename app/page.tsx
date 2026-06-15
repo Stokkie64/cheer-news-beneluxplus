@@ -78,22 +78,20 @@ export default async function Home() {
       };
     });
 
-    // Located events → map pins (colored by type). The map shows only
-    // *independent* events — those NOT hosted by a club. A club-hosted event
-    // (e.g. a club's yearly showcase) is already represented by the club's pin,
-    // so it gets no separate icon; it still appears in the agenda. Likewise
-    // workshops (the `clinic` type, "Workshop" — e.g. a cheercamp) are learning
-    // sessions, not places, so they stay agenda-only. The pin id matches the
-    // CalendarItem id so HomeView can keep pins in sync with the filtered agenda.
-    const MAP_EXCLUDED_EVENT_TYPES = new Set(["clinic"]);
+    // Located events → hover-reveal map pins. The map shows NO persistent event
+    // pins (they cluttered the map — e.g. a club's off-site showcase sitting as
+    // its own diamond). Instead, every located event is a *candidate* pin keyed
+    // by the same `event:{id}` id as its CalendarItem; the pin only appears when
+    // its agenda row is hovered (see HomeView `hoveredItemId` → Map
+    // `activeEventId`). Club-hosted and independent events alike are included so
+    // hovering any event row reveals where it actually is.
     mapEvents = events
-      .filter((e) => e.clubId == null)
-      .filter((e) => !MAP_EXCLUDED_EVENT_TYPES.has(e.type))
       .filter(
         (e): e is typeof e & { lat: number; lng: number } =>
           e.lat != null && e.lng != null,
       )
       .map((e) => {
+        const club = e.clubId ? clubsById.get(e.clubId) : undefined;
         return {
           id: `event:${e.id}`,
           title: e.title,
@@ -101,9 +99,9 @@ export default async function Home() {
           startsAt: e.startsAt,
           endsAt: e.endsAt,
           allDay: e.allDay ?? false,
-          locationText: e.locationText ?? e.city ?? null,
-          region: e.region ?? null,
-          url: e.url ?? null,
+          locationText: e.locationText ?? club?.city ?? e.city ?? null,
+          region: club?.region ?? e.region ?? null,
+          url: e.url ?? (club ? clubProfileUrl(club.slug) : null),
           lat: e.lat,
           lng: e.lng,
         };

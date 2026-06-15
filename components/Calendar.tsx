@@ -42,6 +42,12 @@ interface CalendarProps {
   selectedClubId: string | null;
   onHover: (id: string | null) => void;
   onSelect: (id: string | null) => void;
+  /**
+   * Reports the hovered row's CalendarItem id (`event:{id}` / `gym:...`), or
+   * null on leave. The map uses this to reveal an event's location pin on hover
+   * (events have no persistent pin). Independent of the club-keyed `onHover`.
+   */
+  onHoverItem?: (id: string | null) => void;
   /** clubId → display name, for the club line (events may not embed it). */
   clubNames?: Record<string, string>;
 }
@@ -62,6 +68,7 @@ export function Calendar({
   selectedClubId,
   onHover,
   onSelect,
+  onHoverItem,
   clubNames,
 }: CalendarProps) {
   // Single "now" per mount so "Vandaag"/"Morgen" headers are stable across
@@ -112,6 +119,7 @@ export function Calendar({
                   clubNames={clubNames}
                   onHover={onHover}
                   onSelect={onSelect}
+                  onHoverItem={onHoverItem}
                 />
               ))}
             </ul>
@@ -136,12 +144,14 @@ function AgendaRowItem({
   clubNames,
   onHover,
   onSelect,
+  onHoverItem,
 }: {
   row: AgendaRow;
   focusId: string | null;
   clubNames?: Record<string, string>;
   onHover: (id: string | null) => void;
   onSelect: (id: string | null) => void;
+  onHoverItem?: (id: string | null) => void;
 }) {
   const { item } = row;
   const color = EVENT_TYPE_COLOR[item.type];
@@ -241,8 +251,14 @@ function AgendaRowItem({
 
   return (
     <li
-      onMouseEnter={() => onHover(item.clubId)}
-      onMouseLeave={() => onHover(null)}
+      onMouseEnter={() => {
+        onHover(item.clubId);
+        onHoverItem?.(item.id);
+      }}
+      onMouseLeave={() => {
+        onHover(null);
+        onHoverItem?.(null);
+      }}
       className={rowClass}
     >
       {canFocus ? (
