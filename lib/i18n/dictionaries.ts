@@ -408,6 +408,18 @@ export const nl = {
       selfServeBody:
         "Clubeigenaren kunnen straks zelf hun clubgegevens, teams en evenementen bijwerken — direct, zonder tussenkomst van een redacteur.",
       selfServeWhen: "Later",
+      sourcesTitle: "Bronnenpagina",
+      sourcesBody:
+        "Eén plek voor de officiële regels: rulebooks, scoresheets en richtlijnen van de federatie, gebundeld en altijd vindbaar.",
+      sourcesWhen: "Later",
+      teamClassTitle: "Betere teamindeling",
+      teamClassBody:
+        "Een duidelijker classificatie van teams op niveau, divisie en leeftijdsgroep, zodat je clubs en wedstrijden preciezer kunt filteren en vergelijken.",
+      teamClassWhen: "Later",
+      joinTitle: "“Ik wil meedoen”-knop",
+      joinBody:
+        "Een knop die nieuwe sporters naar de juiste club verwijst op basis van locatie en niveau, en helpt om meteen een proefles in te plannen.",
+      joinWhen: "Later",
     },
     csnHeading: "Over Cheersport Netherlands",
     csnBody1:
@@ -823,6 +835,18 @@ export const en = {
       selfServeBody:
         "Club owners will be able to update their own club details, teams and events directly — without an editor in between.",
       selfServeWhen: "Later",
+      sourcesTitle: "Sources page",
+      sourcesBody:
+        "One place for the official rules: rulebooks, scoresheets and federation guidelines, bundled and always findable.",
+      sourcesWhen: "Later",
+      teamClassTitle: "Better team classification",
+      teamClassBody:
+        "A clearer classification of teams by level, division and age group, so you can filter and compare clubs and competitions more precisely.",
+      teamClassWhen: "Later",
+      joinTitle: "“I want to join” button",
+      joinBody:
+        "A button that points new athletes to the right club by location and level, and helps schedule a trial class right away.",
+      joinWhen: "Later",
     },
     csnHeading: "About Cheersport Netherlands",
     csnBody1:

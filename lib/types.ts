@@ -105,7 +105,6 @@ export interface ClubBase {
   clubType: ClubType;
   status: "active" | "inactive";
   locked: boolean;
-  teamsSummary: TeamSummary[];
   // Richer profile fields (populated by the deep-research pass; optional so
   // existing docs without them stay valid — consumers default to [] / null).
   coaches?: Coach[];
@@ -118,6 +117,10 @@ export interface ClubBase {
 
 export interface ClubClient extends ClubBase {
   id: string;
+  // DERIVED, never stored: computed at read time from the club's `teams`
+  // subcollection (the single source of truth) by lib/queries.ts#teamsToSummary.
+  // Lives on the client/read shape only, so it cannot drift from the source.
+  teamsSummary: TeamSummary[];
   lastVerifiedAt: string | null;
   updatedAt: string;
 }

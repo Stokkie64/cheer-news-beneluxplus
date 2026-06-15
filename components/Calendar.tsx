@@ -50,6 +50,20 @@ interface CalendarProps {
    * (events have no persistent pin). Independent of the club-keyed `onHover`.
    */
   onHoverItem?: (id: string | null) => void;
+  /**
+   * Selecting a club-less item (its own pin, e.g. an event at a venue). Clicking
+   * such a row zooms the map to that pin — the item-level analogue of `onSelect`,
+   * which only handles club-owned rows. `selectedItemId` reflects the current
+   * sticky pick so the row renders focused.
+   */
+  selectedItemId?: string | null;
+  onSelectItem?: (id: string | null) => void;
+  /**
+   * Ids of items that have their own map pin (located events/coaches). Only
+   * these club-less rows are made clickable — a row with no pin can't be zoomed
+   * to, so it stays non-interactive.
+   */
+  pinnableItemIds?: Set<string>;
   /** clubId → display name, for the club line (events may not embed it). */
   clubNames?: Record<string, string>;
 }
@@ -71,6 +85,9 @@ export function Calendar({
   onHover,
   onSelect,
   onHoverItem,
+  selectedItemId,
+  onSelectItem,
+  pinnableItemIds,
   clubNames,
 }: CalendarProps) {
   const { t, locale } = useI18n();
@@ -138,6 +155,9 @@ export function Calendar({
                   onHover={onHover}
                   onSelect={onSelect}
                   onHoverItem={onHoverItem}
+                  selectedItemId={selectedItemId}
+                  onSelectItem={onSelectItem}
+                  pinnable={pinnableItemIds?.has(row.item.id) ?? false}
                 />
               ))}
             </ul>
@@ -164,6 +184,9 @@ function AgendaRowItem({
   onHover,
   onSelect,
   onHoverItem,
+  selectedItemId,
+  onSelectItem,
+  pinnable,
 }: {
   row: AgendaRow;
   focusId: string | null;
@@ -172,24 +195,34 @@ function AgendaRowItem({
   onHover: (id: string | null) => void;
   onSelect: (id: string | null) => void;
   onHoverItem?: (id: string | null) => void;
+  selectedItemId?: string | null;
+  onSelectItem?: (id: string | null) => void;
+  /** This item has its own map pin (club-less located event/coach). */
+  pinnable?: boolean;
 }) {
   const { item } = row;
   const color = EVENT_TYPE_COLOR[item.type];
   // Highlight is keyed by club: focusing a club (via a pin or any of its agenda
   // rows) highlights EVERY row that belongs to it — so all of a club's open-gym
-  // occurrences light up together, not just the hovered/clicked one.
+  // occurrences light up together, not just the hovered/clicked one. A club-less
+  // pin row is its own thing, so it highlights only when it's the selected item.
   const dimmed = focusId != null && item.clubId !== focusId;
-  const focused = focusId != null && item.clubId === focusId;
+  const focused =
+    (focusId != null && item.clubId === focusId) ||
+    (selectedItemId != null && selectedItemId === item.id);
 
   const clubName =
     (item.clubId && clubNames?.[item.clubId]) ||
     (item.isOpenGym ? clubNameFromTitle(item.title) : null);
 
-  // The row body selects the event's club → the map zooms to its location. The
-  // trailing link (if the item has a url) is the ONLY thing that navigates away,
-  // to the club/coach/event page. Splitting them lets a click reveal the pin
-  // without leaving the page, and keeps the <a> out of the <button> (invalid).
-  const canFocus = Boolean(item.clubId);
+  // The row body focuses the item on the map → it zooms in. Club-owned rows
+  // focus the club (onSelect); a club-less row with its own pin focuses that pin
+  // (onSelectItem). The trailing link (if the item has a url) is the ONLY thing
+  // that navigates away; splitting them lets a click reveal the pin without
+  // leaving the page, and keeps the <a> out of the <button> (invalid).
+  const canFocus = Boolean(item.clubId) || Boolean(pinnable);
+  const focusItem = () =>
+    item.clubId ? onSelect(item.clubId) : onSelectItem?.(item.id);
   const linkHref = item.url;
   const linkIsInternal = linkHref?.startsWith("/") ?? false;
 
@@ -284,7 +317,7 @@ function AgendaRowItem({
       {canFocus ? (
         <button
           type="button"
-          onClick={() => onSelect(item.clubId)}
+          onClick={focusItem}
           aria-label={t.agenda.showOnMap(displayTitle(item, t))}
           className={bodyClass}
         >

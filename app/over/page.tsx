@@ -16,6 +16,9 @@ import {
   Globe,
   ArrowUpRight,
   UserCog,
+  BookOpen,
+  Layers,
+  UserPlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { getDictionary } from "@/lib/i18n/server";
@@ -50,6 +53,24 @@ export default async function AboutPage() {
       title: t.about.roadmap.selfServeTitle,
       body: t.about.roadmap.selfServeBody,
       when: t.about.roadmap.selfServeWhen,
+    },
+    {
+      icon: BookOpen,
+      title: t.about.roadmap.sourcesTitle,
+      body: t.about.roadmap.sourcesBody,
+      when: t.about.roadmap.sourcesWhen,
+    },
+    {
+      icon: Layers,
+      title: t.about.roadmap.teamClassTitle,
+      body: t.about.roadmap.teamClassBody,
+      when: t.about.roadmap.teamClassWhen,
+    },
+    {
+      icon: UserPlus,
+      title: t.about.roadmap.joinTitle,
+      body: t.about.roadmap.joinBody,
+      when: t.about.roadmap.joinWhen,
     },
   ];
 
