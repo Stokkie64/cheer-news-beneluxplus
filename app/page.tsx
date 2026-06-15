@@ -81,8 +81,14 @@ export default async function Home() {
     // Located events → map pins (colored by type). The pin id matches the
     // CalendarItem id so HomeView can keep pins in sync with the filtered
     // agenda. Events without coordinates simply list in the agenda only.
+    //
+    // Workshops (the `clinic` type, labelled "Workshop" — e.g. a cheercamp) are
+    // one-off learning sessions rather than places worth pinning, so they stay
+    // in the agenda but get no map pin.
+    const MAP_EXCLUDED_EVENT_TYPES = new Set(["clinic"]);
     const SAME_COORD_EPS = 1e-6;
     mapEvents = events
+      .filter((e) => !MAP_EXCLUDED_EVENT_TYPES.has(e.type))
       .filter(
         (e): e is typeof e & { lat: number; lng: number } =>
           e.lat != null && e.lng != null,
