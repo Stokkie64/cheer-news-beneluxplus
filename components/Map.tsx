@@ -34,6 +34,7 @@ import {
   Popup,
   Tooltip,
   useMap,
+  useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
 import {
@@ -61,12 +62,14 @@ import { safeUrl } from "@/lib/safeUrl";
 
 const NL_CENTER: [number, number] = [52.2, 5.3];
 const NL_ZOOM = 7;
-// Street-level zoom used when a club is selected, so co-located pins that were
-// fanned out on the micro-spread ring become clearly separated.
+// Street-level zoom used when a club is selected, so any pins that were
+// decluttered/fanned at the previous zoom separate onto their true spots.
 const FOCUS_REVEAL_ZOOM = 14;
-// Ring radius (in degrees of latitude, ~0.0011° ≈ 120 m) for fanning out pins
-// that share an identical coordinate.
-const SPREAD_RADIUS_DEG = 0.0011;
+// Declutter: club pins whose screen positions fall within COLLISION_PX of each
+// other at the current zoom are fanned out on a ring of ~SPREAD_PX radius so the
+// back pin of a stack stays visible and clickable.
+const COLLISION_PX = 28;
+const SPREAD_PX = 16;
 
 /**
  * Theme Leaflet's tooltip/popup/cluster chrome with our design tokens. Injected
@@ -246,68 +249,84 @@ function coachIcon(): L.DivIcon {
 }
 
 /**
- * Fan out clubs that share an identical coordinate onto a small fixed ring so
- * each pin stays individually visible/clickable — our no-cluster replacement
- * for stacked pins. Clubs at a unique coordinate keep their exact position.
- * Returns clubId → display `[lat, lng]`. Stable across renders (sorted by id)
- * so pins don't jump.
+ * Zoom-aware declutter: fan out only the club pins that actually *collide on
+ * screen* at the current zoom, so the back pin of a stack is never hidden.
+ *
+ * We project every club to pixel space at `zoom`, greedily group pins whose
+ * screen positions fall within `COLLISION_PX`, and lay each colliding group out
+ * on a small pixel ring around its centroid (converted back to lat/lng). Pins
+ * that don't collide keep their exact coordinate. As you zoom in and real pins
+ * separate, groups dissolve and everything snaps back to its true location — so
+ * we never misrepresent where a club is once there's room to show it.
  */
-function spreadPositions(clubs: MapClub[]): globalThis.Map<string, [number, number]> {
-  const byCoord = new globalThis.Map<string, MapClub[]>();
-  for (const c of clubs) {
-    const key = `${c.lat.toFixed(4)},${c.lng.toFixed(4)}`;
-    const list = byCoord.get(key);
-    if (list) list.push(c);
-    else byCoord.set(key, [c]);
-  }
+function declutterPositions(
+  clubs: MapClub[],
+  map: L.Map,
+  zoom: number,
+): globalThis.Map<string, [number, number]> {
+  const pts = clubs.map((c) => ({
+    id: c.id,
+    lat: c.lat,
+    lng: c.lng,
+    p: map.project([c.lat, c.lng], zoom),
+  }));
   const out = new globalThis.Map<string, [number, number]>();
-  for (const group of byCoord.values()) {
+  const used = new Array<boolean>(pts.length).fill(false);
+
+  for (let i = 0; i < pts.length; i++) {
+    if (used[i]) continue;
+    const group = [i];
+    used[i] = true;
+    for (let j = i + 1; j < pts.length; j++) {
+      if (used[j]) continue;
+      if (pts[i].p.distanceTo(pts[j].p) < COLLISION_PX) {
+        group.push(j);
+        used[j] = true;
+      }
+    }
     if (group.length === 1) {
-      out.set(group[0].id, [group[0].lat, group[0].lng]);
+      out.set(pts[i].id, [pts[i].lat, pts[i].lng]);
       continue;
     }
-    const sorted = [...group].sort((a, b) => a.id.localeCompare(b.id));
-    sorted.forEach((c, i) => {
-      const angle = (2 * Math.PI * i) / sorted.length;
-      const lat = c.lat + SPREAD_RADIUS_DEG * Math.sin(angle);
-      // Scale the lng offset by 1/cos(lat) so the ring reads circular, not oval.
-      const lng =
-        c.lng +
-        (SPREAD_RADIUS_DEG * Math.cos(angle)) /
-          Math.cos((c.lat * Math.PI) / 180);
-      out.set(c.id, [lat, lng]);
+    // Fan the colliding group out on a pixel ring around its centroid.
+    const cx = group.reduce((s, k) => s + pts[k].p.x, 0) / group.length;
+    const cy = group.reduce((s, k) => s + pts[k].p.y, 0) / group.length;
+    const radius = SPREAD_PX + group.length * 2;
+    group.forEach((k, idx) => {
+      const angle = (2 * Math.PI * idx) / group.length;
+      const ll = map.unproject(
+        L.point(cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)),
+        zoom,
+      );
+      out.set(pts[k].id, [ll.lat, ll.lng]);
     });
   }
   return out;
 }
 
 /**
- * Flies the camera to a *selected* club's pin (clicking a pin or an agenda row).
- * `focusId` is driven by selection only — NOT hover — so the camera moves only
- * on an explicit click. Hovering an agenda event just restyles the matching pin
- * (see the marker `state`); it never moves the map. That split is what fixes the
- * old "zoom on hover" annoyance while keeping click-to-zoom.
- *
- * We fly to the pin's *spread* position (the same one rendered) and zoom in to at
- * least street level, so two clubs fanned out on the same micro-spread ring end
- * up clearly separated. If you're already zoomed in further, we keep that zoom.
+ * Flies the camera to a *selected* club's real pin location (clicking a pin or
+ * an agenda row). `focusId` is selection-only — NOT hover — so the camera moves
+ * only on an explicit click; hovering just restyles the matching pin (see the
+ * marker `state`). We zoom in to at least street level so any pins that were
+ * decluttered/fanned at the previous zoom separate onto their true spots.
  */
 function FocusHighlight({
-  positions,
+  clubs,
   focusId,
 }: {
-  positions: globalThis.Map<string, [number, number]>;
+  clubs: MapClub[];
   focusId: string | null;
 }) {
   const map = useMap();
   useEffect(() => {
     if (!focusId) return;
-    const pos = positions.get(focusId);
-    if (!pos) return;
-    map.flyTo(pos, Math.max(map.getZoom(), FOCUS_REVEAL_ZOOM), {
+    const club = clubs.find((c) => c.id === focusId);
+    if (!club) return;
+    map.flyTo([club.lat, club.lng], Math.max(map.getZoom(), FOCUS_REVEAL_ZOOM), {
       animate: true,
     });
-  }, [focusId, positions, map]);
+  }, [focusId, clubs, map]);
   return null;
 }
 
@@ -428,10 +447,6 @@ export default function Map({
     >;
   }, []);
 
-  // Display positions: clubs at a shared coordinate are fanned out on a small
-  // ring (replaces clustering). Memoized so positions are stable across renders.
-  const positions = useMemo(() => spreadPositions(clubs), [clubs]);
-
   // Camera reveal/pan is driven by an explicit *selection* only. Hover must
   // never move the map — it only restyles the matching pin (see the marker
   // `state` below). This is what keeps hovering an agenda event from moving the
@@ -453,31 +468,20 @@ export default function Map({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <FocusHighlight positions={positions} focusId={focusId} />
+        <FocusHighlight clubs={clubs} focusId={focusId} />
         <ResetViewControl onSelect={onSelect} />
         <ResetView signal={resetSignal} />
 
-        {/* Club pins — plain markers (no clustering). Co-located clubs are
-            fanned out via `positions` so each stays individually clickable. */}
-        {clubs.map((club) => {
-          const state =
-            club.id === selectedClubId
-              ? "selected"
-              : club.id === hoveredClubId
-                ? "hover"
-                : "default";
-          return (
-            <ClubMarker
-              key={club.id}
-              club={club}
-              position={positions.get(club.id) ?? [club.lat, club.lng]}
-              icon={icons[state]}
-              isSelected={club.id === selectedClubId}
-              onHover={onHover}
-              onSelect={onSelect}
-            />
-          );
-        })}
+        {/* Club pins — plain markers (no clustering). Pins that collide on
+            screen at the current zoom are fanned out so each is clickable. */}
+        <ClubMarkers
+          clubs={clubs}
+          icons={icons}
+          hoveredClubId={hoveredClubId}
+          selectedClubId={selectedClubId}
+          onHover={onHover}
+          onSelect={onSelect}
+        />
 
         {/* Venue open-gym pins. */}
         {venues.map((venue) => (
@@ -762,6 +766,63 @@ function UserGlyph() {
   );
 }
 
+/**
+ * Renders all club pins, decluttered for the current zoom. Lives *inside*
+ * <MapContainer> so it can read the map (project to pixels) and re-run on
+ * `zoomend`. On each zoom we recompute which pins collide and where their
+ * fanned-out display positions land, so the back pin of a stack is always
+ * reachable; pins snap back to their true coordinate once they no longer
+ * overlap.
+ */
+function ClubMarkers({
+  clubs,
+  icons,
+  hoveredClubId,
+  selectedClubId,
+  onHover,
+  onSelect,
+}: {
+  clubs: MapClub[];
+  icons: Record<"default" | "hover" | "selected", L.DivIcon>;
+  hoveredClubId: string | null;
+  selectedClubId: string | null;
+  onHover: (id: string | null) => void;
+  onSelect: (id: string | null) => void;
+}) {
+  const map = useMap();
+  const [zoom, setZoom] = useState(() => map.getZoom());
+  useMapEvents({ zoomend: () => setZoom(map.getZoom()) });
+
+  const positions = useMemo(
+    () => declutterPositions(clubs, map, zoom),
+    [clubs, map, zoom],
+  );
+
+  return (
+    <>
+      {clubs.map((club) => {
+        const state =
+          club.id === selectedClubId
+            ? "selected"
+            : club.id === hoveredClubId
+              ? "hover"
+              : "default";
+        return (
+          <ClubMarker
+            key={club.id}
+            club={club}
+            position={positions.get(club.id) ?? [club.lat, club.lng]}
+            icon={icons[state]}
+            isSelected={club.id === selectedClubId}
+            onHover={onHover}
+            onSelect={onSelect}
+          />
+        );
+      })}
+    </>
+  );
+}
+
 function ClubMarker({
   club,
   position,
@@ -805,6 +866,10 @@ function ClubMarker({
       ref={markerRef}
       position={position}
       icon={icon}
+      // Raise the hovered/selected pin above any neighbours it overlaps so it's
+      // never trapped behind another teardrop.
+      riseOnHover
+      zIndexOffset={isSelected ? 1000 : 0}
       eventHandlers={{
         mouseover: () => onHover(club.id),
         mouseout: () => onHover(null),
