@@ -9,12 +9,13 @@
  * building markers from inline SVG `divIcon`s, which also lets us tint the
  * selected/hovered pin with the spirit accent.
  *
- * OVERLAPPING PINS — clustering + click-to-spiderfy:
+ * OVERLAPPING PINS — clustering + click-to-zoom:
  *   All pins (clubs, venues, events, coaches) live in one `<MarkerClusterGroup>`.
  *   Nearby pins collapse into an accent count badge (the "pink circle"), and the
- *   clusters break apart automatically as you zoom in. Clicking a cluster
- *   spiderfies it IN PLACE (zoomToBoundsOnClick is off) — the members fan out on
- *   a ring at the current zoom so each is clickable, without the camera zooming.
+ *   clusters break apart automatically as you zoom in. Clicking a cluster zooms
+ *   to its bounds so the members become individual, reliably-clickable pins;
+ *   only genuinely coincident pins spiderfy (at max zoom). We avoid in-place
+ *   spiderfy because the transient spider collapses on any hover-driven rerender.
  *
  * Hover/select sync: hovering a pin calls `onHover`, clicking selects via
  * `onSelect`; the externally-controlled `hoveredClubId`/`selectedClubId` props
@@ -300,23 +301,38 @@ function clusterIcon(cluster: L.MarkerCluster): L.DivIcon {
 }
 
 /**
- * Reveals a club selected from OUTSIDE the map (an agenda row): if its pin is
- * buried in a cluster, `zoomToShowLayer` surfaces it (spiderfying if needed);
- * if it's already visible we just pan to it. `focusId` is selection-only — NOT
- * hover — so the camera never moves on hover.
+ * Surfaces a club focused from OUTSIDE the map (an agenda row), so its
+ * highlighted pin is actually visible instead of being hidden inside a pink
+ * cluster badge.
+ *
+ * Two intents, handled differently to avoid the camera jumping on every hover:
+ *  - SELECTION (click): pan to the pin, and reveal it (zoom/spiderfy) if buried.
+ *  - HOVER: reveal ONLY when the pin is buried in a cluster — zoom in as far as
+ *    `zoomToShowLayer` needs so the individual pin (and its highlight) appears.
+ *    When the pin is already an individual marker, do nothing (the highlight is
+ *    already visible; moving the camera on hover would be jarring).
+ *
+ * We deliberately do NOT clamp the reveal zoom: clamping could stop short and
+ * leave the pin still clustered, defeating the whole point. `zoomToShowLayer`
+ * only zooms as far as needed (and spiderfies same-coordinate stacks), so it
+ * won't overshoot.
  */
 function FocusHighlight({
-  focusId,
+  selectedId,
+  hoveredId,
   clubs,
   clusterRef,
   markerRefs,
 }: {
-  focusId: string | null;
+  selectedId: string | null;
+  hoveredId: string | null;
   clubs: MapClub[];
   clusterRef: React.RefObject<L.MarkerClusterGroup | null>;
   markerRefs: React.RefObject<globalThis.Map<string, L.Marker>>;
 }) {
   const map = useMap();
+  const focusId = selectedId ?? hoveredId;
+  const isSelection = selectedId != null;
   useEffect(() => {
     if (!focusId) return;
     const club = clubs.find((c) => c.id === focusId);
@@ -325,17 +341,19 @@ function FocusHighlight({
     const marker = markerRefs.current.get(focusId);
     if (group && marker && group.hasLayer(marker)) {
       if (group.getVisibleParent(marker) === marker) {
-        map.panTo([club.lat, club.lng], { animate: true });
+        // Already an individual pin → highlight is visible. Pan only on a click.
+        if (isSelection) map.panTo([club.lat, club.lng], { animate: true });
         return;
       }
+      // Buried in a cluster → zoom/spiderfy until the pin surfaces so its
+      // highlight shows. Pan to it afterward only when this was a click.
       group.zoomToShowLayer(marker, () => {
-        if (map.getZoom() > FOCUS_MAX_ZOOM) map.setZoom(FOCUS_MAX_ZOOM);
-        map.panTo([club.lat, club.lng], { animate: true });
+        if (isSelection) map.panTo([club.lat, club.lng], { animate: true });
       });
       return;
     }
-    map.panTo([club.lat, club.lng], { animate: true });
-  }, [focusId, clubs, map, clusterRef, markerRefs]);
+    if (isSelection) map.panTo([club.lat, club.lng], { animate: true });
+  }, [focusId, isSelection, clubs, map, clusterRef, markerRefs]);
   return null;
 }
 
@@ -426,24 +444,47 @@ function RevealPan({ point }: { point: { lat: number; lng: number } | null }) {
   return null;
 }
 
+/**
+ * Flies to a SELECTED (clicked) event/coach pin and zooms in to city level,
+ * mirroring what clicking a club pin does — so a club-less pin row zooms like
+ * every other agenda row. Never zooms back out: a click that lands on an
+ * already-closer view just recenters.
+ */
+function FocusEvent({ point }: { point: { lat: number; lng: number } | null }) {
+  const map = useMap();
+  const lat = point?.lat ?? null;
+  const lng = point?.lng ?? null;
+  useEffect(() => {
+    if (lat == null || lng == null) return;
+    const zoom = Math.max(map.getZoom(), FOCUS_MAX_ZOOM);
+    map.flyTo([lat, lng], zoom, { animate: true });
+  }, [lat, lng, map]);
+  return null;
+}
+
 interface MapProps {
   clubs: MapClub[];
   /** Club-independent open-gym venues, rendered as a distinct pin layer. */
   venues?: MapVenue[];
   /**
-   * Located events — candidates for a hover-revealed pin. Events have NO
-   * persistent pin; only the one whose id matches `activeEventId` is shown.
+   * Located events — candidates for a revealed pin. Events have NO persistent
+   * pin; only the one whose id matches `hoveredEventId`/`selectedEventId` shows.
    */
   events?: MapEvent[];
-  /** Visiting coaches. Like events, only the `activeEventId` match is shown. */
+  /** Visiting coaches. Like events, shown only when hovered/selected. */
   coaches?: MapCoach[];
   /**
-   * The agenda row currently hovered (`event:{id}` / `coach:{id}`). Reveals the
-   * matching event or coach as a single standalone pin (kept out of the cluster
-   * group so it never gets swallowed into a count badge), panning to it only if
-   * it sits off-screen.
+   * The agenda row currently HOVERED (`event:{id}` / `coach:{id}`). Reveals the
+   * matching pin (kept out of the cluster group so it never collapses into a
+   * count badge) and pans to it only if off-screen — a calm preview, no zoom.
    */
-  activeEventId?: string | null;
+  hoveredEventId?: string | null;
+  /**
+   * The agenda row CLICKED (sticky). Keeps the pin shown after the cursor
+   * leaves AND zooms the camera to it — the event/coach analogue of selecting a
+   * club, so a club-less pin row zooms like every other row.
+   */
+  selectedEventId?: string | null;
   hoveredClubId: string | null;
   selectedClubId: string | null;
   onHover: (id: string | null) => void;
@@ -457,7 +498,8 @@ export default function Map({
   venues = [],
   events = [],
   coaches = [],
-  activeEventId = null,
+  hoveredEventId = null,
+  selectedEventId = null,
   hoveredClubId,
   selectedClubId,
   onHover,
@@ -491,28 +533,18 @@ export default function Map({
     new globalThis.Map(),
   );
 
-  // Callback ref: store the cluster group AND bind clusterclick → spiderfy the
-  // moment the group exists (a plain effect could run before the ref is set).
-  // Clicking a cluster fans it out IN PLACE; `zoomToBoundsOnClick={false}` only
-  // disables the zoom, it doesn't auto-spiderfy below max zoom.
+  // Just store the cluster group ref (FocusHighlight uses it to reveal a buried
+  // pin). Cluster CLICKS use the library's default zoom-to-bounds — see the
+  // MarkerClusterGroup props below for why we no longer spiderfy in place.
   const setClusterGroup = useCallback((group: L.MarkerClusterGroup | null) => {
     clusterRef.current = group;
-    const g = group as (L.MarkerClusterGroup & { _cheerBound?: boolean }) | null;
-    if (g && !g._cheerBound) {
-      g._cheerBound = true;
-      g.on("clusterclick", (e: { layer: L.MarkerCluster }) =>
-        e.layer.spiderfy(),
-      );
-    }
   }, []);
 
-  // Camera reveal/pan is driven by an explicit *selection* only. Hover must
-  // never move the map — it only restyles the matching pin. Hovering an agenda
-  // event highlights the pin without moving the camera.
-  const focusId = selectedClubId;
-
-  // The single event/coach revealed by hovering its agenda row (if any). Kept
-  // out of the cluster group below so a lone pin never collapses into a badge.
+  // The single event/coach pin to show: the hovered row wins (live preview),
+  // falling back to the selected (sticky) one so a clicked pin stays put after
+  // the cursor leaves. Kept out of the cluster group below so a lone pin never
+  // collapses into a count badge.
+  const activeEventId = hoveredEventId ?? selectedEventId;
   const activeEvent = useMemo(
     () => events.find((e) => e.id === activeEventId) ?? null,
     [events, activeEventId],
@@ -520,6 +552,23 @@ export default function Map({
   const activeCoach = useMemo(
     () => coaches.find((c) => c.id === activeEventId) ?? null,
     [coaches, activeEventId],
+  );
+
+  // Hovered point → gentle pan-if-offscreen (no zoom). Selected point → zoom-in
+  // fly (matches clicking a club). Looked up across events + coaches by id.
+  const hoveredPoint = useMemo(
+    () =>
+      events.find((e) => e.id === hoveredEventId) ??
+      coaches.find((c) => c.id === hoveredEventId) ??
+      null,
+    [events, coaches, hoveredEventId],
+  );
+  const selectedPoint = useMemo(
+    () =>
+      events.find((e) => e.id === selectedEventId) ??
+      coaches.find((c) => c.id === selectedEventId) ??
+      null,
+    [events, coaches, selectedEventId],
   );
 
   return (
@@ -538,7 +587,8 @@ export default function Map({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <FocusHighlight
-          focusId={focusId}
+          selectedId={selectedClubId}
+          hoveredId={hoveredClubId}
           clubs={clubs}
           clusterRef={clusterRef}
           markerRefs={markerRefs}
@@ -546,13 +596,16 @@ export default function Map({
         <ResetViewControl onSelect={onSelect} />
         <ResetView signal={resetSignal} />
 
-        {/* All pins (clubs, venues, events, coaches) in one cluster group.
-            Nearby pins merge into the accent count badge; clicking it spiderfies
-            in place (zoomToBoundsOnClick off) — no zoom; clusters break apart as
-            you zoom in. */}
+        {/* Pins merge into the accent count badge. Clicking a cluster ZOOMS in
+            to its bounds (the library default) so the members become individual,
+            reliably-clickable pins. We dropped the old in-place spiderfy: it fans
+            out at the current zoom but the transient spider collapses the moment
+            any hover re-renders the marker tree (a react-leaflet-cluster
+            rebuild), so reaching a leg felt broken. Genuinely coincident pins
+            (same coordinate, can't be split by zoom) still spiderfy at max zoom
+            via `spiderfyOnMaxZoom`. */}
         <MarkerClusterGroup
           ref={setClusterGroup}
-          zoomToBoundsOnClick={false}
           spiderfyOnMaxZoom
           showCoverageOnHover={false}
           spiderfyDistanceMultiplier={1.6}
@@ -591,7 +644,9 @@ export default function Map({
         {activeCoach && (
           <CoachMarker coach={activeCoach} icon={coachMarkerIcon} />
         )}
-        <RevealPan point={activeEvent ?? activeCoach} />
+        {/* Hover pans only if off-screen (calm preview); a click zooms in. */}
+        <RevealPan point={hoveredPoint} />
+        <FocusEvent point={selectedPoint} />
       </MapContainer>
     </>
   );
