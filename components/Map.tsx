@@ -300,23 +300,38 @@ function clusterIcon(cluster: L.MarkerCluster): L.DivIcon {
 }
 
 /**
- * Reveals a club selected from OUTSIDE the map (an agenda row): if its pin is
- * buried in a cluster, `zoomToShowLayer` surfaces it (spiderfying if needed);
- * if it's already visible we just pan to it. `focusId` is selection-only — NOT
- * hover — so the camera never moves on hover.
+ * Surfaces a club focused from OUTSIDE the map (an agenda row), so its
+ * highlighted pin is actually visible instead of being hidden inside a pink
+ * cluster badge.
+ *
+ * Two intents, handled differently to avoid the camera jumping on every hover:
+ *  - SELECTION (click): pan to the pin, and reveal it (zoom/spiderfy) if buried.
+ *  - HOVER: reveal ONLY when the pin is buried in a cluster — zoom in as far as
+ *    `zoomToShowLayer` needs so the individual pin (and its highlight) appears.
+ *    When the pin is already an individual marker, do nothing (the highlight is
+ *    already visible; moving the camera on hover would be jarring).
+ *
+ * We deliberately do NOT clamp the reveal zoom: clamping could stop short and
+ * leave the pin still clustered, defeating the whole point. `zoomToShowLayer`
+ * only zooms as far as needed (and spiderfies same-coordinate stacks), so it
+ * won't overshoot.
  */
 function FocusHighlight({
-  focusId,
+  selectedId,
+  hoveredId,
   clubs,
   clusterRef,
   markerRefs,
 }: {
-  focusId: string | null;
+  selectedId: string | null;
+  hoveredId: string | null;
   clubs: MapClub[];
   clusterRef: React.RefObject<L.MarkerClusterGroup | null>;
   markerRefs: React.RefObject<globalThis.Map<string, L.Marker>>;
 }) {
   const map = useMap();
+  const focusId = selectedId ?? hoveredId;
+  const isSelection = selectedId != null;
   useEffect(() => {
     if (!focusId) return;
     const club = clubs.find((c) => c.id === focusId);
@@ -325,17 +340,19 @@ function FocusHighlight({
     const marker = markerRefs.current.get(focusId);
     if (group && marker && group.hasLayer(marker)) {
       if (group.getVisibleParent(marker) === marker) {
-        map.panTo([club.lat, club.lng], { animate: true });
+        // Already an individual pin → highlight is visible. Pan only on a click.
+        if (isSelection) map.panTo([club.lat, club.lng], { animate: true });
         return;
       }
+      // Buried in a cluster → zoom/spiderfy until the pin surfaces so its
+      // highlight shows. Pan to it afterward only when this was a click.
       group.zoomToShowLayer(marker, () => {
-        if (map.getZoom() > FOCUS_MAX_ZOOM) map.setZoom(FOCUS_MAX_ZOOM);
-        map.panTo([club.lat, club.lng], { animate: true });
+        if (isSelection) map.panTo([club.lat, club.lng], { animate: true });
       });
       return;
     }
-    map.panTo([club.lat, club.lng], { animate: true });
-  }, [focusId, clubs, map, clusterRef, markerRefs]);
+    if (isSelection) map.panTo([club.lat, club.lng], { animate: true });
+  }, [focusId, isSelection, clubs, map, clusterRef, markerRefs]);
   return null;
 }
 
@@ -530,9 +547,6 @@ export default function Map({
     }
   }, []);
 
-  // Club camera reveal/pan is driven by an explicit club *selection* only.
-  const focusId = selectedClubId;
-
   // The single event/coach pin to show: the hovered row wins (live preview),
   // falling back to the selected (sticky) one so a clicked pin stays put after
   // the cursor leaves. Kept out of the cluster group below so a lone pin never
@@ -580,7 +594,8 @@ export default function Map({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <FocusHighlight
-          focusId={focusId}
+          selectedId={selectedClubId}
+          hoveredId={hoveredClubId}
           clubs={clubs}
           clusterRef={clusterRef}
           markerRefs={markerRefs}
