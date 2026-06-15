@@ -38,7 +38,6 @@ import "leaflet.markercluster";
 import {
   Globe,
   AtSign,
-  Share2,
   Music2,
   MapPin,
   ArrowRight,
@@ -57,6 +56,24 @@ import type {
   MapCoach,
 } from "@/components/home/types";
 import { safeUrl } from "@/lib/safeUrl";
+
+/** Facebook "f" glyph (lucide dropped brand icons), styled like a lucide icon. */
+function Facebook({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+    </svg>
+  );
+}
 
 const NL_CENTER: [number, number] = [52.2, 5.3];
 const NL_ZOOM = 7;
@@ -706,7 +723,7 @@ function CoachMarker({ coach, icon }: { coach: MapCoach; icon: L.DivIcon }) {
   if (coach.tiktokUrl)
     socials.push({ href: coach.tiktokUrl, label: "TikTok", Icon: Music2 });
   if (coach.facebookUrl)
-    socials.push({ href: coach.facebookUrl, label: "Facebook", Icon: Share2 });
+    socials.push({ href: coach.facebookUrl, label: "Facebook", Icon: Facebook as typeof Globe });
   if (coach.websiteUrl)
     socials.push({ href: coach.websiteUrl, label: "Website", Icon: Globe });
   if (coach.contactEmail)
@@ -851,7 +868,7 @@ function ClubMarker({
   if (instagramUrl)
     socials.push({ href: instagramUrl, label: "Instagram", Icon: AtSign });
   if (facebookUrl)
-    socials.push({ href: facebookUrl, label: "Facebook", Icon: Share2 });
+    socials.push({ href: facebookUrl, label: "Facebook", Icon: Facebook as typeof Globe });
   if (tiktokUrl)
     socials.push({ href: tiktokUrl, label: "TikTok", Icon: Music2 });
 
