@@ -12,6 +12,7 @@ import type {
   OpenGymClient,
   SubmissionClient,
   Team,
+  TeamSummary,
   VisitingCoachClient,
 } from "@/lib/types";
 
@@ -60,14 +61,50 @@ function docToClient<T>(doc: FirebaseFirestore.QueryDocumentSnapshot): T {
 
 // ---- Clubs ----
 
+/**
+ * Derive a club's denormalized team summary from its full team docs.
+ *
+ * SINGLE SOURCE OF TRUTH: the `teams` subcollection is authoritative. The
+ * `teamsSummary` array (consumed by ClubCard badges + ClubGrid filters) is NOT
+ * stored — it is computed here at read time so it can never drift from the
+ * subcollection. Only active teams contribute, matching the detail page.
+ */
+export function teamsToSummary(teams: Team[]): TeamSummary[] {
+  return teams
+    .filter((t) => t.status === "active")
+    .map((t) => ({
+      level: t.level,
+      division: t.division,
+      ageGroup: t.ageGroup,
+    }));
+}
+
 export async function getClubs(): Promise<ClubClient[]> {
-  const snap = await adminDb
-    .collection(COLLECTIONS.clubs)
-    .where("status", "==", "active")
-    .get();
+  // One read for the clubs, one `collectionGroup` read for ALL teams across all
+  // clubs (cheaper than N per-club reads at this scale). Group teams by their
+  // parent club id, then derive each club's teamsSummary — never trusting any
+  // stored copy, so the subcollection stays the single source of truth.
+  const [snap, teamsSnap] = await Promise.all([
+    adminDb.collection(COLLECTIONS.clubs).where("status", "==", "active").get(),
+    adminDb.collectionGroup(COLLECTIONS.teams).get(),
+  ]);
+
+  const teamsByClub = new Map<string, Team[]>();
+  for (const d of teamsSnap.docs) {
+    const clubId = d.ref.parent.parent?.id;
+    if (!clubId) continue;
+    const list = teamsByClub.get(clubId) ?? [];
+    list.push(docToClient<Team>(d));
+    teamsByClub.set(clubId, list);
+  }
+
   return (
     snap.docs
-      .map((d) => docToClient<ClubClient>(d))
+      .map((d) => {
+        const club = docToClient<ClubClient>(d);
+        club.teamsSummary = teamsToSummary(teamsByClub.get(d.id) ?? []);
+        return club;
+      })
       // `name` is required by the type but `docToClient` does no runtime check;
       // guard with `?? ""` so a malformed legacy doc can't throw here.
       .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "nl"))
@@ -81,7 +118,11 @@ export async function getClubBySlug(slug: string): Promise<ClubClient | null> {
     .limit(1)
     .get();
   if (snap.empty) return null;
-  return docToClient<ClubClient>(snap.docs[0]);
+  const club = docToClient<ClubClient>(snap.docs[0]);
+  // Derive teamsSummary from the subcollection (single source of truth) rather
+  // than the stored copy on the doc.
+  club.teamsSummary = teamsToSummary(await getClubTeams(club.id));
+  return club;
 }
 
 /** Full team list from the club's `teams` subcollection. */
