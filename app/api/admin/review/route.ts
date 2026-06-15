@@ -236,7 +236,9 @@ async function createEntityFromSubmission(
       clubType: "club",
       status: "active",
       locked: false,
-      teamsSummary: [],
+      // teamsSummary is intentionally NOT stored: it is derived at read time
+      // from the `teams` subcollection (the single source of truth). See
+      // lib/queries.ts#teamsToSummary.
       lastVerifiedAt: null,
       updatedAt: FieldValue.serverTimestamp(),
     });
