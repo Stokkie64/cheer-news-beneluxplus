@@ -9,20 +9,19 @@
  * building markers from inline SVG `divIcon`s, which also lets us tint the
  * selected/hovered pin with the spirit accent.
  *
- * OVERLAPPING PINS — no clustering, on-demand spiderfy (see MapPins):
- *   Every pin (club, venue, event, coach) sits at its true coordinate. Pins that
- *   share an *identical* coordinate get a small fixed offset (`fixedSpread`) so
- *   they don't fully stack. Nothing moves on zoom. When you click a pin that
- *   overlaps others on screen, the whole overlapping group (any mix of kinds)
- *   fans out on a ring with connector legs so each is reachable; the fan
- *   collapses on zoom or a background click. No count-badge blob.
+ * OVERLAPPING PINS — clustering + click-to-spiderfy:
+ *   All pins (clubs, venues, events, coaches) live in one `<MarkerClusterGroup>`.
+ *   Nearby pins collapse into an accent count badge (the "pink circle"), and the
+ *   clusters break apart automatically as you zoom in. Clicking a cluster
+ *   spiderfies it IN PLACE (zoomToBoundsOnClick is off) — the members fan out on
+ *   a ring at the current zoom so each is clickable, without the camera zooming.
  *
  * Hover/select sync: hovering a pin calls `onHover`, clicking selects via
  * `onSelect`; the externally-controlled `hoveredClubId`/`selectedClubId` props
  * restyle the matching marker. Selecting a club (here or from the agenda) flies
  * the camera to that pin's spread position; hover never moves the camera.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
@@ -30,12 +29,12 @@ import {
   TileLayer,
   Marker,
   Popup,
-  Polyline,
   Tooltip,
   useMap,
-  useMapEvents,
 } from "react-leaflet";
+import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
+import "leaflet.markercluster";
 import {
   Globe,
   AtSign,
@@ -61,17 +60,9 @@ import { safeUrl } from "@/lib/safeUrl";
 
 const NL_CENTER: [number, number] = [52.2, 5.3];
 const NL_ZOOM = 7;
-// Street-level zoom used when a club is selected, so overlapping pins separate.
-const FOCUS_REVEAL_ZOOM = 14;
-// Two pins whose screen positions fall within COLLISION_PX of each other count
-// as "overlapping": clicking one spiderfies the whole group.
-const COLLISION_PX = 42;
-// Pixel radius of the on-click spiderfy ring (scaled up a little per member).
-const SPIDERFY_PX = 50;
-// Fixed geographic offset (~0.0008° lat ≈ 90 m) used to fan apart clubs that
-// share an IDENTICAL coordinate, so true duplicates are visible (and separate
-// once you zoom in) without any zoom-dependent movement.
-const DUP_SPREAD_DEG = 0.0008;
+// City-level cap so revealing a pin from the agenda surfaces it without flying
+// all the way in.
+const FOCUS_MAX_ZOOM = 11;
 
 /**
  * Theme Leaflet's tooltip/popup/cluster chrome with our design tokens. Injected
@@ -108,6 +99,26 @@ const MAP_THEME_CSS = `
   }
   /* Neutralize Leaflet's directional tooltip arrow (we omit it for clarity). */
   .cheer-tooltip.leaflet-tooltip::before { display: none; }
+
+  /* ---- Cluster badge: an accent count bubble (the "pink circle"). ---- */
+  .cheer-cluster { background: transparent; border: none; }
+  .cheer-cluster-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    border-radius: 9999px;
+    background: var(--accent);
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 13px;
+    line-height: 1;
+    border: 2px solid #ffffff;
+    box-shadow: 0 1px 4px rgb(23 22 27 / 0.35);
+  }
+  .leaflet-cluster-anim .leaflet-marker-icon,
+  .leaflet-cluster-anim .leaflet-marker-shadow { transition: transform 0.25s ease-out, opacity 0.25s ease-in; }
 
   /* ---- Venue (club-independent open gym) pin: a teal round badge so it
      reads as a different category from the dark teardrop club pins. ---- */
@@ -257,97 +268,57 @@ function coachIcon(): L.DivIcon {
 }
 
 /**
- * Base display positions: every club sits at its TRUE coordinate, except clubs
- * that share an IDENTICAL coordinate (e.g. two teams at one gym, or a duplicate
- * listing), which are fanned onto a small FIXED ring so they don't hide behind
- * each other. This is zoom-INDEPENDENT — pins never move as you zoom; the only
- * on-demand movement is the click spiderfy (see ClubMarkers).
+ * Themed cluster icon: the accent "pink circle" count bubble. Clicking it
+ * spiderfies the cluster in place (no zoom) — see the MarkerClusterGroup config.
  */
-function fixedSpread(
-  items: ReadonlyArray<{ id: string; lat: number; lng: number }>,
-): globalThis.Map<string, [number, number]> {
-  const byCoord = new globalThis.Map<
-    string,
-    Array<{ id: string; lat: number; lng: number }>
-  >();
-  for (const c of items) {
-    const key = `${c.lat.toFixed(5)},${c.lng.toFixed(5)}`;
-    const list = byCoord.get(key);
-    if (list) list.push(c);
-    else byCoord.set(key, [c]);
-  }
-  const out = new globalThis.Map<string, [number, number]>();
-  for (const group of byCoord.values()) {
-    if (group.length === 1) {
-      out.set(group[0].id, [group[0].lat, group[0].lng]);
-      continue;
-    }
-    const sorted = [...group].sort((a, b) => a.id.localeCompare(b.id));
-    sorted.forEach((c, i) => {
-      const angle = (2 * Math.PI * i) / sorted.length;
-      const lat = c.lat + DUP_SPREAD_DEG * Math.sin(angle);
-      // Scale lng by 1/cos(lat) so the ring reads circular, not oval.
-      const lng =
-        c.lng +
-        (DUP_SPREAD_DEG * Math.cos(angle)) / Math.cos((c.lat * Math.PI) / 180);
-      out.set(c.id, [lat, lng]);
-    });
-  }
-  return out;
-}
-
-/**
- * On-demand spiderfy: fan a group of overlapping pins out onto a pixel ring
- * around their shared centre at the current zoom (converted back to lat/lng),
- * returning the fanned position + the centre, so legs can be drawn to it.
- */
-function spiderfyLayout(
-  ids: string[],
-  base: globalThis.Map<string, [number, number]>,
-  map: L.Map,
-  zoom: number,
-): { center: [number, number]; legs: Array<{ id: string; pos: [number, number] }> } {
-  const pts = ids
-    .map((id) => ({ id, ll: base.get(id) }))
-    .filter((p): p is { id: string; ll: [number, number] } => p.ll != null)
-    .map((p) => ({ id: p.id, p: map.project(p.ll, zoom) }));
-  const cx = pts.reduce((s, p) => s + p.p.x, 0) / pts.length;
-  const cy = pts.reduce((s, p) => s + p.p.y, 0) / pts.length;
-  const radius = SPIDERFY_PX + pts.length * 3;
-  const center = map.unproject(L.point(cx, cy), zoom);
-  const legs = pts.map((p, idx) => {
-    const angle = (2 * Math.PI * idx) / pts.length - Math.PI / 2;
-    const ll = map.unproject(
-      L.point(cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)),
-      zoom,
-    );
-    return { id: p.id, pos: [ll.lat, ll.lng] as [number, number] };
+function clusterIcon(cluster: L.MarkerCluster): L.DivIcon {
+  const count = cluster.getChildCount();
+  const size = count < 10 ? 34 : count < 100 ? 40 : 48;
+  return L.divIcon({
+    html: `<div class="cheer-cluster-badge" aria-label="${count} items">${count}</div>`,
+    className: "cheer-cluster",
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
   });
-  return { center: [center.lat, center.lng], legs };
 }
 
 /**
- * Flies the camera to a *selected* club's real pin location (clicking a pin or
- * an agenda row). `focusId` is selection-only — NOT hover — so the camera moves
- * only on an explicit click; hovering just restyles the matching pin (see the
- * marker `state`). We zoom in to at least street level so nearby pins separate.
+ * Reveals a club selected from OUTSIDE the map (an agenda row): if its pin is
+ * buried in a cluster, `zoomToShowLayer` surfaces it (spiderfying if needed);
+ * if it's already visible we just pan to it. `focusId` is selection-only — NOT
+ * hover — so the camera never moves on hover.
  */
 function FocusHighlight({
-  clubs,
   focusId,
+  clubs,
+  clusterRef,
+  markerRefs,
 }: {
-  clubs: MapClub[];
   focusId: string | null;
+  clubs: MapClub[];
+  clusterRef: React.RefObject<L.MarkerClusterGroup | null>;
+  markerRefs: React.RefObject<globalThis.Map<string, L.Marker>>;
 }) {
   const map = useMap();
   useEffect(() => {
     if (!focusId) return;
     const club = clubs.find((c) => c.id === focusId);
     if (!club) return;
-    map.flyTo([club.lat, club.lng], Math.max(map.getZoom(), FOCUS_REVEAL_ZOOM), {
-      animate: true,
-    });
-  }, [focusId, clubs, map]);
+    const group = clusterRef.current;
+    const marker = markerRefs.current.get(focusId);
+    if (group && marker && group.hasLayer(marker)) {
+      if (group.getVisibleParent(marker) === marker) {
+        map.panTo([club.lat, club.lng], { animate: true });
+        return;
+      }
+      group.zoomToShowLayer(marker, () => {
+        if (map.getZoom() > FOCUS_MAX_ZOOM) map.setZoom(FOCUS_MAX_ZOOM);
+        map.panTo([club.lat, club.lng], { animate: true });
+      });
+      return;
+    }
+    map.panTo([club.lat, club.lng], { animate: true });
+  }, [focusId, clubs, map, clusterRef, markerRefs]);
   return null;
 }
 
@@ -468,10 +439,31 @@ export default function Map({
     >;
   }, []);
 
+  // Cluster group + per-club marker handles, so FocusHighlight can reveal a
+  // club's pin (zoomToShowLayer) when it's selected from the agenda.
+  const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
+  const markerRefs = useRef<globalThis.Map<string, L.Marker>>(
+    new globalThis.Map(),
+  );
+
+  // Callback ref: store the cluster group AND bind clusterclick → spiderfy the
+  // moment the group exists (a plain effect could run before the ref is set).
+  // Clicking a cluster fans it out IN PLACE; `zoomToBoundsOnClick={false}` only
+  // disables the zoom, it doesn't auto-spiderfy below max zoom.
+  const setClusterGroup = useCallback((group: L.MarkerClusterGroup | null) => {
+    clusterRef.current = group;
+    const g = group as (L.MarkerClusterGroup & { _cheerBound?: boolean }) | null;
+    if (g && !g._cheerBound) {
+      g._cheerBound = true;
+      g.on("clusterclick", (e: { layer: L.MarkerCluster }) =>
+        e.layer.spiderfy(),
+      );
+    }
+  }, []);
+
   // Camera reveal/pan is driven by an explicit *selection* only. Hover must
-  // never move the map — it only restyles the matching pin (see the marker
-  // `state` below). This is what keeps hovering an agenda event from moving the
-  // camera; you get the highlight without the camera jump.
+  // never move the map — it only restyles the matching pin. Hovering an agenda
+  // event highlights the pin without moving the camera.
   const focusId = selectedClubId;
 
   return (
@@ -489,27 +481,57 @@ export default function Map({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <FocusHighlight clubs={clubs} focusId={focusId} />
+        <FocusHighlight
+          focusId={focusId}
+          clubs={clubs}
+          clusterRef={clusterRef}
+          markerRefs={markerRefs}
+        />
         <ResetViewControl onSelect={onSelect} />
         <ResetView signal={resetSignal} />
 
-        {/* All pins (clubs, venues, events, coaches). No clustering: pins sit
-            at their true spots and any that overlap on screen fan out together
-            on click, regardless of category. */}
-        <MapPins
-          clubs={clubs}
-          venues={venues}
-          events={events}
-          coaches={coaches}
-          clubIcons={icons}
-          venueMarkerIcon={venueMarkerIcon}
-          eventIcons={eventIcons}
-          coachMarkerIcon={coachMarkerIcon}
-          hoveredClubId={hoveredClubId}
-          selectedClubId={selectedClubId}
-          onHover={onHover}
-          onSelect={onSelect}
-        />
+        {/* All pins (clubs, venues, events, coaches) in one cluster group.
+            Nearby pins merge into the accent count badge; clicking it spiderfies
+            in place (zoomToBoundsOnClick off) — no zoom; clusters break apart as
+            you zoom in. */}
+        <MarkerClusterGroup
+          ref={setClusterGroup}
+          zoomToBoundsOnClick={false}
+          spiderfyOnMaxZoom
+          showCoverageOnHover={false}
+          spiderfyDistanceMultiplier={1.6}
+          maxClusterRadius={50}
+          chunkedLoading
+          iconCreateFunction={clusterIcon}
+        >
+          {clubs.map((club) => (
+            <ClubMarker
+              key={club.id}
+              club={club}
+              icon={
+                icons[club.id === selectedClubId ? "selected" : "default"]
+              }
+              isSelected={club.id === selectedClubId}
+              isHovered={club.id === hoveredClubId}
+              onHover={onHover}
+              onSelect={onSelect}
+              markerRefs={markerRefs}
+            />
+          ))}
+          {venues.map((venue) => (
+            <VenueMarker key={venue.id} venue={venue} icon={venueMarkerIcon} />
+          ))}
+          {events.map((event) => (
+            <EventMarker
+              key={event.id}
+              event={event}
+              icon={eventIcons[event.type]}
+            />
+          ))}
+          {coaches.map((coach) => (
+            <CoachMarker key={coach.id} coach={coach} icon={coachMarkerIcon} />
+          ))}
+        </MarkerClusterGroup>
       </MapContainer>
     </>
   );
@@ -520,35 +542,9 @@ function formatSlot(s: MapVenue["sessions"][number]): string {
   return `${s.weekday} · ${s.startTime} – ${s.endTime}`;
 }
 
-function VenueMarker({
-  venue,
-  position,
-  icon,
-  opacity,
-  open,
-  onActivate,
-}: {
-  venue: MapVenue;
-  position: [number, number];
-  icon: L.DivIcon;
-  opacity: number;
-  open: boolean;
-  onActivate: (id: string) => void;
-}) {
-  const markerRef = useRef<L.Marker>(null);
-  useEffect(() => {
-    if (open) markerRef.current?.openPopup();
-  }, [open]);
+function VenueMarker({ venue, icon }: { venue: MapVenue; icon: L.DivIcon }) {
   return (
-    <Marker
-      ref={markerRef}
-      position={position}
-      icon={icon}
-      opacity={opacity}
-      riseOnHover
-      bubblingMouseEvents={false}
-      eventHandlers={{ click: () => onActivate(venue.id) }}
-    >
+    <Marker position={[venue.lat, venue.lng]} icon={icon} riseOnHover>
       <Tooltip
         direction="top"
         offset={[0, -16]}
@@ -559,7 +555,6 @@ function VenueMarker({
         {venue.city && <span className="cheer-tooltip-city">{venue.city}</span>}
       </Tooltip>
 
-      {open && (
       <Popup>
         <div className="flex min-w-52 flex-col gap-1">
           <span className="inline-flex items-center gap-1.5 font-display text-sm font-bold text-[var(--ink)]">
@@ -603,7 +598,6 @@ function VenueMarker({
           )}
         </div>
       </Popup>
-      )}
     </Marker>
   );
 }
@@ -629,35 +623,9 @@ function formatEventWhen(event: MapEvent): string {
   return `${date} · ${startTime} – ${EVENT_TIME_FMT.format(new Date(event.endsAt))}`;
 }
 
-function EventMarker({
-  event,
-  position,
-  icon,
-  opacity,
-  open,
-  onActivate,
-}: {
-  event: MapEvent;
-  position: [number, number];
-  icon: L.DivIcon;
-  opacity: number;
-  open: boolean;
-  onActivate: (id: string) => void;
-}) {
-  const markerRef = useRef<L.Marker>(null);
-  useEffect(() => {
-    if (open) markerRef.current?.openPopup();
-  }, [open]);
+function EventMarker({ event, icon }: { event: MapEvent; icon: L.DivIcon }) {
   return (
-    <Marker
-      ref={markerRef}
-      position={position}
-      icon={icon}
-      opacity={opacity}
-      riseOnHover
-      bubblingMouseEvents={false}
-      eventHandlers={{ click: () => onActivate(event.id) }}
-    >
+    <Marker position={[event.lat, event.lng]} icon={icon} riseOnHover>
       <Tooltip
         direction="top"
         offset={[0, -14]}
@@ -670,7 +638,6 @@ function EventMarker({
         </span>
       </Tooltip>
 
-      {open && (
       <Popup>
         <div className="flex min-w-48 flex-col gap-1">
           <span className="font-display text-sm font-bold text-[var(--ink)]">
@@ -704,7 +671,6 @@ function EventMarker({
           )}
         </div>
       </Popup>
-      )}
     </Marker>
   );
 }
@@ -728,25 +694,7 @@ function formatStay(coach: MapCoach): string {
   return `${start} – ${end}`;
 }
 
-function CoachMarker({
-  coach,
-  position,
-  icon,
-  opacity,
-  open,
-  onActivate,
-}: {
-  coach: MapCoach;
-  position: [number, number];
-  icon: L.DivIcon;
-  opacity: number;
-  open: boolean;
-  onActivate: (id: string) => void;
-}) {
-  const markerRef = useRef<L.Marker>(null);
-  useEffect(() => {
-    if (open) markerRef.current?.openPopup();
-  }, [open]);
+function CoachMarker({ coach, icon }: { coach: MapCoach; icon: L.DivIcon }) {
   // Icon-row contact links, mirroring ClubMarker's `socials` pattern.
   const socials: { href: string; label: string; Icon: typeof Globe }[] = [];
   if (coach.instagramUrl)
@@ -775,15 +723,7 @@ function CoachMarker({
     });
 
   return (
-    <Marker
-      ref={markerRef}
-      position={position}
-      icon={icon}
-      opacity={opacity}
-      riseOnHover
-      bubblingMouseEvents={false}
-      eventHandlers={{ click: () => onActivate(coach.id) }}
-    >
+    <Marker position={[coach.lat, coach.lng]} icon={icon} riseOnHover>
       <Tooltip
         direction="top"
         offset={[0, -30]}
@@ -794,7 +734,6 @@ function CoachMarker({
         <span className="cheer-tooltip-city">{coach.city}</span>
       </Tooltip>
 
-      {open && (
       <Popup>
         <div className="flex min-w-48 flex-col gap-1">
           <span className="inline-flex items-center gap-1.5 font-display text-sm font-bold text-[var(--ink)]">
@@ -830,7 +769,6 @@ function CoachMarker({
           )}
         </div>
       </Popup>
-      )}
     </Marker>
   );
 }
@@ -859,212 +797,23 @@ function UserGlyph() {
   );
 }
 
-/**
- * Renders all club pins at their true (fixed-spread) coordinates and adds an
- * on-demand spiderfy: clicking a pin that overlaps others on screen fans the
- * whole group out on a ring (with connector legs) so each is clickable; clicking
- * a leg selects it. Lives *inside* <MapContainer> to read the map for pixel
- * projection. Nothing moves on zoom — the spiderfy collapses on zoom or on a
- * background click.
- */
-type PinKind = "club" | "venue" | "event" | "coach";
-
-function MapPins({
-  clubs,
-  venues,
-  events,
-  coaches,
-  clubIcons,
-  venueMarkerIcon,
-  eventIcons,
-  coachMarkerIcon,
-  hoveredClubId,
-  selectedClubId,
-  onHover,
-  onSelect,
-}: {
-  clubs: MapClub[];
-  venues: MapVenue[];
-  events: MapEvent[];
-  coaches: MapCoach[];
-  clubIcons: Record<"default" | "hover" | "selected", L.DivIcon>;
-  venueMarkerIcon: L.DivIcon;
-  eventIcons: Record<EventType, L.DivIcon>;
-  coachMarkerIcon: L.DivIcon;
-  hoveredClubId: string | null;
-  selectedClubId: string | null;
-  onHover: (id: string | null) => void;
-  onSelect: (id: string | null) => void;
-}) {
-  const map = useMap();
-  const [zoom, setZoom] = useState(() => map.getZoom());
-  const [spiderfied, setSpiderfied] = useState<string[] | null>(null);
-  // Which non-club pin has its popup open (clubs use selection for that).
-  const [opened, setOpened] = useState<string | null>(null);
-  // Markers set `bubblingMouseEvents={false}`, so this 'click' only fires for
-  // genuine background clicks — collapsing the fan without racing the marker
-  // click that opened it.
-  useMapEvents({
-    zoomstart: () => setSpiderfied(null),
-    zoomend: () => setZoom(map.getZoom()),
-    click: () => {
-      setSpiderfied(null);
-      setOpened(null);
-    },
-  });
-
-  // Every pin (any kind) indexed by its unique id, so overlap detection and the
-  // spiderfy work across all categories — a club behind a venue still fans out.
-  const allPins = useMemo(() => {
-    const arr: { id: string; lat: number; lng: number; kind: PinKind }[] = [];
-    for (const c of clubs) arr.push({ id: c.id, lat: c.lat, lng: c.lng, kind: "club" });
-    for (const v of venues) arr.push({ id: v.id, lat: v.lat, lng: v.lng, kind: "venue" });
-    for (const e of events) arr.push({ id: e.id, lat: e.lat, lng: e.lng, kind: "event" });
-    for (const c of coaches) arr.push({ id: c.id, lat: c.lat, lng: c.lng, kind: "coach" });
-    return arr;
-  }, [clubs, venues, events, coaches]);
-
-  const base = useMemo(() => fixedSpread(allPins), [allPins]);
-  const kindOf = useMemo(() => {
-    const m = new globalThis.Map<string, PinKind>();
-    for (const p of allPins) m.set(p.id, p.kind);
-    return m;
-  }, [allPins]);
-
-  // Pin ids whose positions fall within COLLISION_PX of `id` at the current zoom.
-  const overlapGroup = (id: string): string[] => {
-    const seedLL = base.get(id);
-    if (!seedLL) return [id];
-    const seed = map.project(seedLL, zoom);
-    const group: string[] = [];
-    for (const p of allPins) {
-      const ll = base.get(p.id);
-      if (ll && map.project(ll, zoom).distanceTo(seed) < COLLISION_PX) {
-        group.push(p.id);
-      }
-    }
-    return group;
-  };
-
-  // Open a single pin: clubs select (drives agenda sync + their popup); other
-  // kinds just open their popup.
-  const activate = (id: string) => {
-    if (kindOf.get(id) === "club") {
-      onSelect(id);
-      setOpened(null);
-    } else {
-      setOpened(id);
-    }
-  };
-
-  const handleActivate = (id: string) => {
-    // A click on an already-fanned leg opens/selects it and collapses the fan.
-    if (spiderfied?.includes(id)) {
-      setSpiderfied(null);
-      activate(id);
-      return;
-    }
-    // A click on a pin that overlaps others fans the group out (no open yet).
-    const group = overlapGroup(id);
-    if (group.length > 1) {
-      setSpiderfied(group);
-      setOpened(null);
-      return;
-    }
-    // A lone pin opens directly.
-    setSpiderfied(null);
-    activate(id);
-  };
-
-  const spider = spiderfied ? spiderfyLayout(spiderfied, base, map, zoom) : null;
-  const legPos = new globalThis.Map<string, [number, number]>(
-    spider?.legs.map((l) => [l.id, l.pos]) ?? [],
-  );
-  const pos = (id: string, lat: number, lng: number): [number, number] =>
-    legPos.get(id) ?? base.get(id) ?? [lat, lng];
-  // While a group is fanned out, fade every pin that's NOT in it so the spider
-  // stands out and doesn't read as colliding with its neighbours.
-  const dim = (id: string): number =>
-    spiderfied && !spiderfied.includes(id) ? 0.3 : 1;
-
-  return (
-    <>
-      {/* Connector legs from the spiderfy centre to each fanned pin. */}
-      {spider?.legs.map((l) => (
-        <Polyline
-          key={`leg:${l.id}`}
-          positions={[spider.center, l.pos]}
-          pathOptions={{ color: "#ff2d6b", weight: 1.5, opacity: 0.7 }}
-        />
-      ))}
-      {clubs.map((club) => (
-        <ClubMarker
-          key={club.id}
-          club={club}
-          position={pos(club.id, club.lat, club.lng)}
-          icon={clubIcons[club.id === selectedClubId ? "selected" : "default"]}
-          opacity={dim(club.id)}
-          isSelected={club.id === selectedClubId}
-          isHovered={club.id === hoveredClubId}
-          onHover={onHover}
-          onActivate={handleActivate}
-        />
-      ))}
-      {venues.map((venue) => (
-        <VenueMarker
-          key={venue.id}
-          venue={venue}
-          position={pos(venue.id, venue.lat, venue.lng)}
-          icon={venueMarkerIcon}
-          opacity={dim(venue.id)}
-          open={opened === venue.id}
-          onActivate={handleActivate}
-        />
-      ))}
-      {events.map((event) => (
-        <EventMarker
-          key={event.id}
-          event={event}
-          position={pos(event.id, event.lat, event.lng)}
-          icon={eventIcons[event.type]}
-          opacity={dim(event.id)}
-          open={opened === event.id}
-          onActivate={handleActivate}
-        />
-      ))}
-      {coaches.map((coach) => (
-        <CoachMarker
-          key={coach.id}
-          coach={coach}
-          position={pos(coach.id, coach.lat, coach.lng)}
-          icon={coachMarkerIcon}
-          opacity={dim(coach.id)}
-          open={opened === coach.id}
-          onActivate={handleActivate}
-        />
-      ))}
-    </>
-  );
-}
 
 function ClubMarker({
   club,
-  position,
   icon,
-  opacity,
   isSelected,
   isHovered,
   onHover,
-  onActivate,
+  onSelect,
+  markerRefs,
 }: {
   club: MapClub;
-  position: [number, number];
   icon: L.DivIcon;
-  opacity: number;
   isSelected: boolean;
   isHovered: boolean;
   onHover: (id: string | null) => void;
-  onActivate: (id: string) => void;
+  onSelect: (id: string | null) => void;
+  markerRefs: React.RefObject<globalThis.Map<string, L.Marker>>;
 }) {
   const markerRef = useRef<L.Marker>(null);
 
@@ -1074,9 +823,19 @@ function ClubMarker({
     markerRef.current?.setIcon(icon);
   }, [icon]);
 
-  // The popup is bound (and auto-opens) only for the selected club, so a click
-  // that merely spiderfies an overlapping group never pops anything. Open it
-  // imperatively once selected (the child Popup has mounted/bound by now).
+  // Register the marker handle so FocusHighlight can reveal it (zoomToShowLayer)
+  // when this club is selected from the agenda.
+  useEffect(() => {
+    const refs = markerRefs.current;
+    const marker = markerRef.current;
+    if (marker) refs.set(club.id, marker);
+    return () => {
+      refs.delete(club.id);
+    };
+  }, [club.id, markerRefs]);
+
+  // Open the popup when the club becomes selected (e.g. from the agenda); a
+  // direct pin click opens it via Leaflet's default behaviour.
   useEffect(() => {
     if (isSelected) markerRef.current?.openPopup();
   }, [isSelected]);
@@ -1099,20 +858,15 @@ function ClubMarker({
   return (
     <Marker
       ref={markerRef}
-      position={position}
+      position={[club.lat, club.lng]}
       icon={icon}
-      opacity={opacity}
-      // Raise the hovered/selected pin above any neighbours it overlaps so it's
-      // never trapped behind another teardrop.
+      // Raise the hovered/selected pin above any neighbours it overlaps.
       riseOnHover
       zIndexOffset={isSelected ? 1000 : 0}
-      // Don't let marker clicks reach the map's 'click' (which collapses the
-      // spiderfy) — that race is what made the fan open then instantly close.
-      bubblingMouseEvents={false}
       eventHandlers={{
         mouseover: () => onHover(club.id),
         mouseout: () => onHover(null),
-        click: () => onActivate(club.id),
+        click: () => onSelect(club.id),
       }}
     >
       {/*
