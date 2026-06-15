@@ -524,12 +524,14 @@ function VenueMarker({
   venue,
   position,
   icon,
+  opacity,
   open,
   onActivate,
 }: {
   venue: MapVenue;
   position: [number, number];
   icon: L.DivIcon;
+  opacity: number;
   open: boolean;
   onActivate: (id: string) => void;
 }) {
@@ -542,6 +544,7 @@ function VenueMarker({
       ref={markerRef}
       position={position}
       icon={icon}
+      opacity={opacity}
       riseOnHover
       bubblingMouseEvents={false}
       eventHandlers={{ click: () => onActivate(venue.id) }}
@@ -630,12 +633,14 @@ function EventMarker({
   event,
   position,
   icon,
+  opacity,
   open,
   onActivate,
 }: {
   event: MapEvent;
   position: [number, number];
   icon: L.DivIcon;
+  opacity: number;
   open: boolean;
   onActivate: (id: string) => void;
 }) {
@@ -648,6 +653,7 @@ function EventMarker({
       ref={markerRef}
       position={position}
       icon={icon}
+      opacity={opacity}
       riseOnHover
       bubblingMouseEvents={false}
       eventHandlers={{ click: () => onActivate(event.id) }}
@@ -726,12 +732,14 @@ function CoachMarker({
   coach,
   position,
   icon,
+  opacity,
   open,
   onActivate,
 }: {
   coach: MapCoach;
   position: [number, number];
   icon: L.DivIcon;
+  opacity: number;
   open: boolean;
   onActivate: (id: string) => void;
 }) {
@@ -771,6 +779,7 @@ function CoachMarker({
       ref={markerRef}
       position={position}
       icon={icon}
+      opacity={opacity}
       riseOnHover
       bubblingMouseEvents={false}
       eventHandlers={{ click: () => onActivate(coach.id) }}
@@ -973,6 +982,10 @@ function MapPins({
   );
   const pos = (id: string, lat: number, lng: number): [number, number] =>
     legPos.get(id) ?? base.get(id) ?? [lat, lng];
+  // While a group is fanned out, fade every pin that's NOT in it so the spider
+  // stands out and doesn't read as colliding with its neighbours.
+  const dim = (id: string): number =>
+    spiderfied && !spiderfied.includes(id) ? 0.3 : 1;
 
   return (
     <>
@@ -990,6 +1003,7 @@ function MapPins({
           club={club}
           position={pos(club.id, club.lat, club.lng)}
           icon={clubIcons[club.id === selectedClubId ? "selected" : "default"]}
+          opacity={dim(club.id)}
           isSelected={club.id === selectedClubId}
           isHovered={club.id === hoveredClubId}
           onHover={onHover}
@@ -1002,6 +1016,7 @@ function MapPins({
           venue={venue}
           position={pos(venue.id, venue.lat, venue.lng)}
           icon={venueMarkerIcon}
+          opacity={dim(venue.id)}
           open={opened === venue.id}
           onActivate={handleActivate}
         />
@@ -1012,6 +1027,7 @@ function MapPins({
           event={event}
           position={pos(event.id, event.lat, event.lng)}
           icon={eventIcons[event.type]}
+          opacity={dim(event.id)}
           open={opened === event.id}
           onActivate={handleActivate}
         />
@@ -1022,6 +1038,7 @@ function MapPins({
           coach={coach}
           position={pos(coach.id, coach.lat, coach.lng)}
           icon={coachMarkerIcon}
+          opacity={dim(coach.id)}
           open={opened === coach.id}
           onActivate={handleActivate}
         />
@@ -1034,6 +1051,7 @@ function ClubMarker({
   club,
   position,
   icon,
+  opacity,
   isSelected,
   isHovered,
   onHover,
@@ -1042,6 +1060,7 @@ function ClubMarker({
   club: MapClub;
   position: [number, number];
   icon: L.DivIcon;
+  opacity: number;
   isSelected: boolean;
   isHovered: boolean;
   onHover: (id: string | null) => void;
@@ -1082,6 +1101,7 @@ function ClubMarker({
       ref={markerRef}
       position={position}
       icon={icon}
+      opacity={opacity}
       // Raise the hovered/selected pin above any neighbours it overlaps so it's
       // never trapped behind another teardrop.
       riseOnHover
