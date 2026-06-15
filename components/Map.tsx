@@ -63,11 +63,11 @@ const NL_CENTER: [number, number] = [52.2, 5.3];
 const NL_ZOOM = 7;
 // Street-level zoom used when a club is selected, so overlapping pins separate.
 const FOCUS_REVEAL_ZOOM = 14;
-// Two club pins whose screens positions fall within COLLISION_PX of each other
-// count as "overlapping": clicking one spiderfies the whole group.
-const COLLISION_PX = 30;
+// Two pins whose screen positions fall within COLLISION_PX of each other count
+// as "overlapping": clicking one spiderfies the whole group.
+const COLLISION_PX = 42;
 // Pixel radius of the on-click spiderfy ring (scaled up a little per member).
-const SPIDERFY_PX = 38;
+const SPIDERFY_PX = 50;
 // Fixed geographic offset (~0.0008° lat ≈ 90 m) used to fan apart clubs that
 // share an IDENTICAL coordinate, so true duplicates are visible (and separate
 // once you zoom in) without any zoom-dependent movement.
@@ -543,6 +543,7 @@ function VenueMarker({
       position={position}
       icon={icon}
       riseOnHover
+      bubblingMouseEvents={false}
       eventHandlers={{ click: () => onActivate(venue.id) }}
     >
       <Tooltip
@@ -648,6 +649,7 @@ function EventMarker({
       position={position}
       icon={icon}
       riseOnHover
+      bubblingMouseEvents={false}
       eventHandlers={{ click: () => onActivate(event.id) }}
     >
       <Tooltip
@@ -770,6 +772,7 @@ function CoachMarker({
       position={position}
       icon={icon}
       riseOnHover
+      bubblingMouseEvents={false}
       eventHandlers={{ click: () => onActivate(coach.id) }}
     >
       <Tooltip
@@ -889,17 +892,13 @@ function MapPins({
   const [spiderfied, setSpiderfied] = useState<string[] | null>(null);
   // Which non-club pin has its popup open (clubs use selection for that).
   const [opened, setOpened] = useState<string | null>(null);
-  // A click on a marker can also bubble to the map's 'click'; suppress that one
-  // bubbled event so a spiderfy isn't collapsed by the very click that opened it.
-  const suppressMapClick = useRef(false);
+  // Markers set `bubblingMouseEvents={false}`, so this 'click' only fires for
+  // genuine background clicks — collapsing the fan without racing the marker
+  // click that opened it.
   useMapEvents({
     zoomstart: () => setSpiderfied(null),
     zoomend: () => setZoom(map.getZoom()),
     click: () => {
-      if (suppressMapClick.current) {
-        suppressMapClick.current = false;
-        return;
-      }
       setSpiderfied(null);
       setOpened(null);
     },
@@ -950,12 +949,6 @@ function MapPins({
   };
 
   const handleActivate = (id: string) => {
-    // Any marker click should swallow the bubbled map 'click' (rAF resets the
-    // flag so a later genuine background click still collapses the fan).
-    suppressMapClick.current = true;
-    requestAnimationFrame(() => {
-      suppressMapClick.current = false;
-    });
     // A click on an already-fanned leg opens/selects it and collapses the fan.
     if (spiderfied?.includes(id)) {
       setSpiderfied(null);
@@ -991,25 +984,18 @@ function MapPins({
           pathOptions={{ color: "#ff2d6b", weight: 1.5, opacity: 0.7 }}
         />
       ))}
-      {clubs.map((club) => {
-        const state =
-          club.id === selectedClubId
-            ? "selected"
-            : club.id === hoveredClubId
-              ? "hover"
-              : "default";
-        return (
-          <ClubMarker
-            key={club.id}
-            club={club}
-            position={pos(club.id, club.lat, club.lng)}
-            icon={clubIcons[state]}
-            isSelected={club.id === selectedClubId}
-            onHover={onHover}
-            onActivate={handleActivate}
-          />
-        );
-      })}
+      {clubs.map((club) => (
+        <ClubMarker
+          key={club.id}
+          club={club}
+          position={pos(club.id, club.lat, club.lng)}
+          icon={clubIcons[club.id === selectedClubId ? "selected" : "default"]}
+          isSelected={club.id === selectedClubId}
+          isHovered={club.id === hoveredClubId}
+          onHover={onHover}
+          onActivate={handleActivate}
+        />
+      ))}
       {venues.map((venue) => (
         <VenueMarker
           key={venue.id}
@@ -1049,6 +1035,7 @@ function ClubMarker({
   position,
   icon,
   isSelected,
+  isHovered,
   onHover,
   onActivate,
 }: {
@@ -1056,6 +1043,7 @@ function ClubMarker({
   position: [number, number];
   icon: L.DivIcon;
   isSelected: boolean;
+  isHovered: boolean;
   onHover: (id: string | null) => void;
   onActivate: (id: string) => void;
 }) {
@@ -1098,6 +1086,9 @@ function ClubMarker({
       // never trapped behind another teardrop.
       riseOnHover
       zIndexOffset={isSelected ? 1000 : 0}
+      // Don't let marker clicks reach the map's 'click' (which collapses the
+      // spiderfy) — that race is what made the fan open then instantly close.
+      bubblingMouseEvents={false}
       eventHandlers={{
         mouseover: () => onHover(club.id),
         mouseout: () => onHover(null),
@@ -1105,22 +1096,25 @@ function ClubMarker({
       }}
     >
       {/*
-        Club identity label. The selected club's label is `permanent` so it
-        stays readable during the pin↔agenda sync; all others show on hover.
-        Re-keyed on selection so Leaflet rebuilds the tooltip with the right
-        permanence/styling (it can't toggle `permanent` in place).
+        Club identity label. The label is shown (as a permanent tooltip) whenever
+        the club is hovered OR selected — driven by React state, not Leaflet's
+        own hover tooltip, so it reliably disappears on mouse-out (the old
+        hover tooltip could get stuck when the icon swapped). Keyed by state so
+        Leaflet rebuilds it with the right styling.
       */}
-      <Tooltip
-        key={isSelected ? "permanent" : "hover"}
-        direction="top"
-        offset={[0, -28]}
-        opacity={1}
-        permanent={isSelected}
-        className={`cheer-tooltip${isSelected ? " cheer-tooltip--selected" : ""}`}
-      >
-        {club.name}
-        <span className="cheer-tooltip-city">{club.city}</span>
-      </Tooltip>
+      {(isSelected || isHovered) && (
+        <Tooltip
+          key={isSelected ? "selected" : "hover"}
+          direction="top"
+          offset={[0, -28]}
+          opacity={1}
+          permanent
+          className={`cheer-tooltip${isSelected ? " cheer-tooltip--selected" : ""}`}
+        >
+          {club.name}
+          <span className="cheer-tooltip-city">{club.city}</span>
+        </Tooltip>
+      )}
 
       {isSelected && (
       <Popup>
