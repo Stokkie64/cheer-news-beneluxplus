@@ -5,11 +5,7 @@ import { Search, SlidersHorizontal, X } from "lucide-react";
 import { ClubCard } from "@/components/ClubCard";
 import { EmptyState } from "@/components/home/EmptyState";
 import { Users } from "lucide-react";
-import {
-  AGE_GROUP_LABEL,
-  DIVISION_LABEL,
-  LEVEL_LABEL,
-} from "@/components/TeamBadges";
+import { useI18n } from "@/lib/i18n/context";
 import type { AgeGroup, ClubClient, Division, Level } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -37,6 +33,7 @@ interface ClubGridProps {
  * province facets (province derived from each club's `region`).
  */
 export function ClubGrid({ clubs }: ClubGridProps) {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [level, setLevel] = useState<Level | "">("");
   const [division, setDivision] = useState<Division | "">("");
@@ -98,8 +95,8 @@ export function ClubGrid({ clubs }: ClubGridProps) {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Zoek op clubnaam of plaats…"
-          aria-label="Zoek clubs"
+          placeholder={t.clubs.searchPlaceholder}
+          aria-label={t.clubs.searchAria}
           className="h-11 w-full rounded-full border border-[var(--border)] bg-[var(--surface)] pl-10 pr-4 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
         />
       </div>
@@ -108,29 +105,29 @@ export function ClubGrid({ clubs }: ClubGridProps) {
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--muted)]">
           <SlidersHorizontal className="size-4" aria-hidden />
-          Filter
+          {t.clubs.filter}
         </span>
 
         <FilterSelect
-          label="Niveau"
+          label={t.clubs.level}
           value={level}
           onChange={(v) => setLevel(v as Level | "")}
-          options={LEVEL_OPTIONS.map((l) => [l, LEVEL_LABEL[l]])}
+          options={LEVEL_OPTIONS.map((l) => [l, t.level[l]])}
         />
         <FilterSelect
-          label="Divisie"
+          label={t.clubs.division}
           value={division}
           onChange={(v) => setDivision(v as Division | "")}
-          options={DIVISION_OPTIONS.map((d) => [d, DIVISION_LABEL[d]])}
+          options={DIVISION_OPTIONS.map((d) => [d, t.division[d]])}
         />
         <FilterSelect
-          label="Leeftijd"
+          label={t.clubs.age}
           value={age}
           onChange={(v) => setAge(v as AgeGroup | "")}
-          options={AGE_OPTIONS.map((a) => [a, AGE_GROUP_LABEL[a]])}
+          options={AGE_OPTIONS.map((a) => [a, t.ageGroup[a]])}
         />
         <FilterSelect
-          label="Provincie"
+          label={t.clubs.province}
           value={province}
           onChange={setProvince}
           options={provinces.map((p) => [p, p])}
@@ -143,7 +140,7 @@ export function ClubGrid({ clubs }: ClubGridProps) {
             className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
           >
             <X className="size-3" aria-hidden />
-            Wissen
+            {t.clubs.clear}
           </button>
         )}
       </div>
@@ -153,9 +150,9 @@ export function ClubGrid({ clubs }: ClubGridProps) {
         <span className="font-semibold tabular-nums text-[var(--ink)]">
           {filtered.length}
         </span>{" "}
-        {filtered.length === 1 ? "club" : "clubs"}
+        {filtered.length === 1 ? t.clubs.one : t.clubs.many}
         {hasActive && clubs.length !== filtered.length
-          ? ` van ${clubs.length}`
+          ? t.clubs.ofTotal(clubs.length)
           : ""}
       </p>
 
@@ -166,13 +163,13 @@ export function ClubGrid({ clubs }: ClubGridProps) {
             icon={Users}
             title={
               clubs.length === 0
-                ? "Nog geen clubs bekend"
-                : "Geen clubs gevonden"
+                ? t.clubs.emptyNoneTitle
+                : t.clubs.emptyFilteredTitle
             }
             hint={
               clubs.length === 0
-                ? "Zodra clubs zijn toegevoegd verschijnen ze hier."
-                : "Pas je zoekopdracht of filters aan."
+                ? t.clubs.emptyNoneHint
+                : t.clubs.emptyFilteredHint
             }
           />
         </div>
@@ -180,7 +177,7 @@ export function ClubGrid({ clubs }: ClubGridProps) {
         <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((club) => (
             <li key={club.id}>
-              <ClubCard club={club} />
+              <ClubCard club={club} t={t} />
             </li>
           ))}
         </ul>
@@ -200,6 +197,7 @@ function FilterSelect({
   onChange: (value: string) => void;
   options: [string, string][];
 }) {
+  const { t } = useI18n();
   const active = value !== "";
   return (
     <select
@@ -213,7 +211,7 @@ function FilterSelect({
           : "border-[var(--border)] bg-[var(--surface)] text-[var(--ink)]",
       )}
     >
-      <option value="">{label}: alle</option>
+      <option value="">{t.clubs.filterAll(label)}</option>
       {options.map(([val, lbl]) => (
         <option key={val} value={val}>
           {lbl}

@@ -1,8 +1,9 @@
 "use client";
 
 import { Filter, X } from "lucide-react";
-import { EVENT_TYPE_COLOR, EVENT_TYPE_LABEL } from "@/lib/eventColors";
+import { EVENT_TYPE_COLOR } from "@/lib/eventColors";
 import type { EventType } from "@/lib/types";
+import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 import type { HomeFilters } from "@/components/home/types";
 
@@ -31,6 +32,8 @@ export function Filters({
   provinces,
   resultCount,
 }: FiltersProps) {
+  const { t } = useI18n();
+
   function toggleType(type: EventType) {
     const next = new Set(filters.types);
     if (next.has(type)) next.delete(type);
@@ -60,9 +63,11 @@ export function Filters({
       {/* Top row: title + result count + reset */}
       <div className="flex items-center gap-2">
         <Filter className="size-4 text-[var(--muted)]" aria-hidden />
-        <span className="font-display text-sm font-semibold">Filters</span>
+        <span className="font-display text-sm font-semibold">
+          {t.filters.title}
+        </span>
         <span className="text-xs tabular-nums text-[var(--muted)]">
-          {resultCount} {resultCount === 1 ? "item" : "items"}
+          {resultCount} {resultCount === 1 ? t.filters.item : t.filters.items}
         </span>
         {hasActive && (
           <button
@@ -71,7 +76,7 @@ export function Filters({
             className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
           >
             <X className="size-3" aria-hidden />
-            Wissen
+            {t.filters.clear}
           </button>
         )}
       </div>
@@ -102,7 +107,7 @@ export function Filters({
                   backgroundColor: active ? "rgba(255,255,255,0.9)" : color,
                 }}
               />
-              {EVENT_TYPE_LABEL[type]}
+              {t.eventType[type]}
             </button>
           );
         })}
@@ -115,10 +120,10 @@ export function Filters({
           onChange={(e) =>
             onChange({ ...filters, province: e.target.value || null })
           }
-          aria-label="Provincie"
+          aria-label={t.filters.province}
           className="h-8 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-medium text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
         >
-          <option value="">Alle provincies</option>
+          <option value="">{t.filters.allProvinces}</option>
           {provinces.map((province) => (
             <option key={province} value={province}>
               {province}
@@ -127,7 +132,7 @@ export function Filters({
         </select>
 
         <label className="inline-flex items-center gap-1 text-xs text-[var(--muted)]">
-          Van
+          {t.filters.from}
           <input
             type="date"
             value={filters.from ?? ""}
@@ -138,7 +143,7 @@ export function Filters({
           />
         </label>
         <label className="inline-flex items-center gap-1 text-xs text-[var(--muted)]">
-          Tot
+          {t.filters.to}
           <input
             type="date"
             value={filters.to ?? ""}
@@ -177,7 +182,7 @@ export function Filters({
               )}
             />
           </span>
-          Alleen open gyms
+          {t.filters.openGymsOnly}
         </button>
       </div>
     </div>

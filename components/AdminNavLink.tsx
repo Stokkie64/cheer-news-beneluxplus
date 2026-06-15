@@ -12,7 +12,7 @@ import { clientAuth } from "@/lib/firebase";
  * confirmed admin access. The /admin page + API still enforce the allowlist
  * server-side; this just hides the link from everyone else.
  */
-export function AdminNavLink() {
+export function AdminNavLink({ label }: { label: string }) {
   const [isAdmin, setIsAdmin] = useState(false);
   useEffect(() => {
     let cancelled = false;
@@ -42,7 +42,7 @@ export function AdminNavLink() {
       href="/admin"
       className="rounded-full px-3 py-1.5 font-medium text-[var(--accent)] hover:bg-[var(--accent-soft)]"
     >
-      Admin
+      {label}
     </Link>
   );
 }

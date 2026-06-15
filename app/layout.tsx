@@ -3,6 +3,8 @@ import { Geist, Geist_Mono, Bricolage_Grotesque } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
+import { I18nProvider } from "@/lib/i18n/context";
+import { getDictionary, getLocale } from "@/lib/i18n/server";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,30 +22,35 @@ const display = Bricolage_Grotesque({
   weight: ["600", "700", "800"],
 });
 
-export const metadata: Metadata = {
-  title: {
-    default: "Cheer News: alle cheerleading in Nederland",
-    template: "%s · Cheer News",
-  },
-  description:
-    "Eén overzicht van alle cheerleadingclubs, wedstrijden, open gyms en trainingstijden in Nederland. Kaart, kalender en clubgids.",
-  metadataBase: new URL("https://cheer-news-beneluxplus.web.app"),
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getDictionary();
+  return {
+    title: {
+      default: t.meta.defaultTitle,
+      template: "%s · Cheer News",
+    },
+    description: t.meta.description,
+    metadataBase: new URL("https://cheer-news-beneluxplus.web.app"),
+  };
+}
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
   return (
     <html
-      lang="nl"
+      lang={locale}
       className={`${geistSans.variable} ${geistMono.variable} ${display.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <SiteHeader />
-        <main className="flex flex-1 flex-col">{children}</main>
-        <SiteFooter />
+        <I18nProvider locale={locale}>
+          <SiteHeader />
+          <main className="flex flex-1 flex-col">{children}</main>
+          <SiteFooter />
+        </I18nProvider>
       </body>
     </html>
   );

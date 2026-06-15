@@ -1,15 +1,16 @@
 import { CalendarClock, MapPin } from "lucide-react";
 import { EmptyState } from "@/components/home/EmptyState";
 import { weeklySlots } from "@/lib/recurrence";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 import type { OpenGymClient } from "@/lib/types";
 
 /** One team's weekly training slots, derived from its recurring docs. */
 interface TrainingGroup {
-  label: string; // team name, or "Overig" for unlabeled trainings
+  label: string; // team name, or "Overig"/"Other" for unlabeled trainings
   isOther: boolean; // sorts last
   rows: {
     key: string;
-    weekday: string; // Dutch weekday, e.g. "Maandag"
+    weekday: string; // localized weekday, e.g. "Maandag" / "Monday"
     weekdayIndex: number;
     startTime: string;
     endTime: string;
@@ -19,7 +20,7 @@ interface TrainingGroup {
 }
 
 /** Group recurring training docs by `teamLabel` into weekly schedule rows. */
-function buildGroups(trainings: OpenGymClient[]): TrainingGroup[] {
+function buildGroups(trainings: OpenGymClient[], dict: Dictionary): TrainingGroup[] {
   const byLabel = new Map<string, TrainingGroup>();
 
   for (const t of trainings) {
@@ -27,13 +28,17 @@ function buildGroups(trainings: OpenGymClient[]): TrainingGroup[] {
     const key = label ?? "__other__";
     let group = byLabel.get(key);
     if (!group) {
-      group = { label: label ?? "Overig", isOther: label == null, rows: [] };
+      group = {
+        label: label ?? dict.club.otherTeam,
+        isOther: label == null,
+        rows: [],
+      };
       byLabel.set(key, group);
     }
     for (const slot of weeklySlots(t)) {
       group.rows.push({
         key: `${t.id}:${slot.weekdayIndex}:${slot.startTime}`,
-        weekday: slot.weekday,
+        weekday: dict.weekdays[slot.weekdayIndex] ?? slot.weekday,
         weekdayIndex: slot.weekdayIndex,
         startTime: slot.startTime,
         endTime: slot.endTime,
@@ -62,17 +67,19 @@ function buildGroups(trainings: OpenGymClient[]): TrainingGroup[] {
 /** Recurring weekly team training schedule, grouped per team. */
 export function TrainingTimesList({
   trainings,
+  t,
 }: {
   trainings: OpenGymClient[];
+  t: Dictionary;
 }) {
-  const groups = buildGroups(trainings);
+  const groups = buildGroups(trainings, t);
 
   if (groups.length === 0) {
     return (
       <EmptyState
         icon={CalendarClock}
-        title="Nog geen trainingstijden bekend"
-        hint="Wekelijkse trainingsmomenten per team verschijnen hier zodra ze bekend zijn."
+        title={t.club.emptyTrainingTitle}
+        hint={t.club.emptyTrainingHint}
       />
     );
   }

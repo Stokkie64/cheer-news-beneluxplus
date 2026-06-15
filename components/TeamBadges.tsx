@@ -1,35 +1,7 @@
 import { Badge } from "@/components/ui/Badge";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { cn } from "@/lib/utils";
-import type { AgeGroup, Division, Level, Team, TeamSummary } from "@/lib/types";
-
-/** NL display label per level. */
-export const LEVEL_LABEL: Record<Level, string> = {
-  "1": "Level 1",
-  "2": "Level 2",
-  "3": "Level 3",
-  "4": "Level 4",
-  "5": "Level 5",
-  "6": "Level 6",
-  elite: "Elite",
-  prep: "Prep",
-  recreational: "Recreational",
-};
-
-/** NL display label per division. */
-export const DIVISION_LABEL: Record<Division, string> = {
-  all_girl: "All Girl",
-  coed: "Coed",
-  all_boy: "All Boy",
-};
-
-/** NL display label per age group. */
-export const AGE_GROUP_LABEL: Record<AgeGroup, string> = {
-  mini: "Mini",
-  youth: "Youth",
-  junior: "Junior",
-  senior: "Senior",
-  open: "Open",
-};
+import type { Level, Team, TeamSummary } from "@/lib/types";
 
 /** Stable display order for levels (numeric tiers first, then named tiers). */
 const LEVEL_ORDER: Level[] = [
@@ -52,6 +24,8 @@ function sortLevels(levels: Iterable<Level>): Level[] {
 interface TeamBadgesProps {
   /** Either denormalized summaries (club doc) or full team docs. */
   teams: TeamSummary[] | Team[];
+  /** Active dictionary for the taxonomy labels + empty text. */
+  t: Dictionary;
   /**
    * "levels" (default): one badge per distinct level — compact, for cards.
    * "full": one badge per distinct level+division+age combination.
@@ -63,25 +37,26 @@ interface TeamBadgesProps {
 }
 
 /**
- * Renders a club's offerings as compact NL badges. Dedupes across teams so a
- * club with many same-level teams shows one badge per distinct value.
+ * Renders a club's offerings as compact badges. Dedupes across teams so a club
+ * with many same-level teams shows one badge per distinct value.
  */
 export function TeamBadges({
   teams,
+  t,
   variant = "levels",
   max,
   className,
 }: TeamBadgesProps) {
   if (!teams || teams.length === 0) {
     return (
-      <span className="text-xs text-[var(--muted)]">Nog geen teams bekend</span>
+      <span className="text-xs text-[var(--muted)]">{t.clubs.noTeams}</span>
     );
   }
 
   const labels =
     variant === "levels"
-      ? sortLevels(teams.map((t) => t.level)).map((l) => LEVEL_LABEL[l])
-      : dedupeFullLabels(teams);
+      ? sortLevels(teams.map((tm) => tm.level)).map((l) => t.level[l])
+      : dedupeFullLabels(teams, t);
 
   const shown = max != null ? labels.slice(0, max) : labels;
   const overflow = labels.length - shown.length;
@@ -99,14 +74,14 @@ export function TeamBadges({
 }
 
 /** Distinct "Level · Division · Age" combinations, in a sensible order. */
-function dedupeFullLabels(teams: TeamSummary[] | Team[]): string[] {
+function dedupeFullLabels(teams: TeamSummary[] | Team[], t: Dictionary): string[] {
   const seen = new Map<string, { level: Level; label: string }>();
-  for (const t of teams) {
-    const key = `${t.level}|${t.division}|${t.ageGroup}`;
+  for (const tm of teams) {
+    const key = `${tm.level}|${tm.division}|${tm.ageGroup}`;
     if (seen.has(key)) continue;
     seen.set(key, {
-      level: t.level,
-      label: `${LEVEL_LABEL[t.level]} · ${DIVISION_LABEL[t.division]} · ${AGE_GROUP_LABEL[t.ageGroup]}`,
+      level: tm.level,
+      label: `${t.level[tm.level]} · ${t.division[tm.division]} · ${t.ageGroup[tm.ageGroup]}`,
     });
   }
   const order = sortLevels([...seen.values()].map((v) => v.level));
@@ -115,7 +90,7 @@ function dedupeFullLabels(teams: TeamSummary[] | Team[]): string[] {
     .sort(
       (a, b) =>
         (orderIndex.get(a.level) ?? 0) - (orderIndex.get(b.level) ?? 0) ||
-        a.label.localeCompare(b.label, "nl"),
+        a.label.localeCompare(b.label),
     )
     .map((v) => v.label);
 }

@@ -4,6 +4,7 @@ import { MapPin } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { TeamBadges } from "@/components/TeamBadges";
 import { safeUrl } from "@/lib/safeUrl";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 import type { ClubClient } from "@/lib/types";
 
 /** Up-to-two-letter initials from a club name, for the logo fallback. */
@@ -21,7 +22,7 @@ function initials(name: string): string {
  * Directory tile for a single club. Logo contains (never distorts) and falls
  * back to tasteful initials; name is the typographic anchor.
  */
-export function ClubCard({ club }: { club: ClubClient }) {
+export function ClubCard({ club, t }: { club: ClubClient; t: Dictionary }) {
   return (
     <Card className="group relative flex h-full flex-col gap-3 p-4 transition-shadow hover:shadow-[var(--shadow-md)]">
       <div className="flex items-start gap-3">
@@ -45,7 +46,7 @@ export function ClubCard({ club }: { club: ClubClient }) {
       </div>
 
       <div className="mt-auto">
-        <TeamBadges teams={club.teamsSummary} max={4} />
+        <TeamBadges teams={club.teamsSummary} t={t} max={4} />
       </div>
     </Card>
   );
