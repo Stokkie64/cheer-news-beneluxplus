@@ -17,7 +17,7 @@ import {
   AtSign,
   CalendarClock,
   CalendarDays,
-  Dumbbell,
+  DoorOpen,
   Globe,
   Mail,
   MapPin,
@@ -287,7 +287,7 @@ export default async function ClubProfilePage({
             <EventsList events={events} />
           </Section>
 
-          <Section icon={Dumbbell} title="Open gyms">
+          <Section icon={DoorOpen} title="Open gyms">
             <OpenGymsList openGyms={openGyms} />
           </Section>
         </div>
