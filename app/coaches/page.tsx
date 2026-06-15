@@ -25,26 +25,22 @@ import { EmptyState } from "@/components/home/EmptyState";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Coaches op bezoek",
+  title: "Visiting coaches",
   description:
-    "Gast- en touringcoaches die ons land bezoeken: zie waar en wanneer ze zijn en neem rechtstreeks contact op.",
+    "Guest and touring coaches visiting the Netherlands: see where and when they are, and get in touch directly.",
 };
 
-const STAY_DATE_FMT = new Intl.DateTimeFormat("nl-NL", {
+const STAY_DATE_FMT = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
   month: "short",
   year: "numeric",
 });
 
-function stripDot(s: string): string {
-  return s.replace(/\.(?=\s|$)/g, "");
-}
-
-/** "15 jun 2026 – 20 jun 2026", or "Vanaf 15 jun 2026" when open-ended. */
+/** "15 Jun 2026 – 20 Jun 2026", or "From 15 Jun 2026" when open-ended. */
 function formatStay(coach: VisitingCoachClient): string {
-  const start = stripDot(STAY_DATE_FMT.format(new Date(coach.startsAt)));
-  if (!coach.endsAt) return `Vanaf ${start}`;
-  return `${start} – ${stripDot(STAY_DATE_FMT.format(new Date(coach.endsAt)))}`;
+  const start = STAY_DATE_FMT.format(new Date(coach.startsAt));
+  if (!coach.endsAt) return `From ${start}`;
+  return `${start} – ${STAY_DATE_FMT.format(new Date(coach.endsAt))}`;
 }
 
 export default async function CoachesPage() {
@@ -60,16 +56,16 @@ export default async function CoachesPage() {
     <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:py-10">
       <header className="mb-6 max-w-2xl">
         <h1 className="font-display text-3xl font-extrabold tracking-tight text-[var(--ink)] sm:text-4xl">
-          Coaches op bezoek
+          Visiting coaches
         </h1>
         <p className="mt-2 text-[var(--muted)]">
-          Gast- en touringcoaches die ons land bezoeken. Zie waar en wanneer ze
-          zijn en neem rechtstreeks contact op. Ben jij zelf op bezoek?{" "}
+          Guest and touring coaches visiting the Netherlands. See where and when
+          they are, and reach out directly. Visiting yourself?{" "}
           <a
             href="/submit"
             className="font-medium text-[var(--accent)] underline underline-offset-2"
           >
-            Meld je aan
+            Submit your stay
           </a>
           .
         </p>
@@ -78,8 +74,8 @@ export default async function CoachesPage() {
       {coaches.length === 0 ? (
         <EmptyState
           icon={Users}
-          title="Nog geen coaches op bezoek"
-          hint="Zodra een gastcoach zich aanmeldt en is goedgekeurd, verschijnt die hier."
+          title="No visiting coaches yet"
+          hint="Once a guest coach submits their stay and it's approved, they'll appear here."
         />
       ) : (
         <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -109,13 +105,13 @@ function CoachCard({ coach }: { coach: VisitingCoachClient }) {
   if (coach.contactEmail)
     socials.push({
       href: `mailto:${coach.contactEmail}`,
-      label: "E-mail",
+      label: "Email",
       Icon: Mail,
     });
   if (coach.phone)
     socials.push({
       href: `tel:${coach.phone.replace(/[^\d+]/g, "")}`,
-      label: "Telefoon",
+      label: "Phone",
       Icon: Phone,
     });
 
