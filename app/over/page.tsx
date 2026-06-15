@@ -5,6 +5,7 @@
  * expansions, and who Cheersport Netherlands (CSN) is, the federation this
  * project is built for. No data fetching, so it's a plain Server Component.
  */
+import Image from "next/image";
 import Link from "next/link";
 import {
   MapPinned,
@@ -12,6 +13,7 @@ import {
   Building2,
   Globe,
   ArrowUpRight,
+  UserCog,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
@@ -33,6 +35,12 @@ const ROADMAP = [
     icon: MapPinned,
     title: "Duitse grensstreek",
     body: "Het aangrenzende Ruhrgebied en de Duitse grensregio, waar veel clubs vlak bij Nederland zitten.",
+    when: "Later",
+  },
+  {
+    icon: UserCog,
+    title: "Clubs beheren zichzelf",
+    body: "Clubeigenaren kunnen straks zelf hun clubgegevens, teams en evenementen bijwerken — direct, zonder tussenkomst van een redacteur.",
     when: "Later",
   },
 ];
@@ -114,6 +122,14 @@ export default function AboutPage() {
 
       {/* About CSN */}
       <section className="mb-12 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[var(--shadow-sm)]">
+        <Image
+          src="/cheersport-netherlands.svg"
+          alt="Cheersport Netherlands"
+          width={200}
+          height={60}
+          className="mb-5 h-auto w-44"
+          unoptimized
+        />
         <h2 className="font-display text-xl font-bold tracking-tight">
           Over Cheersport Netherlands
         </h2>
