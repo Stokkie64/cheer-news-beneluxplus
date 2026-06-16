@@ -126,6 +126,4 @@ export interface HomeFilters {
   from: string | null;
   /** ISO date (yyyy-MM-dd) inclusive upper bound, or null. */
   to: string | null;
-  /** Only show open-gym occurrences. */
-  openGymsOnly: boolean;
 }

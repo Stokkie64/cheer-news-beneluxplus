@@ -55,7 +55,6 @@ const EMPTY_FILTERS: HomeFilters = {
   province: null,
   from: null,
   to: null,
-  openGymsOnly: false,
 };
 
 export function HomeView({
@@ -130,7 +129,6 @@ export function HomeView({
   // Apply filters to the agenda items (small dataset → recompute each render).
   const filteredItems = useMemo(() => {
     return items.filter((it) => {
-      if (filters.openGymsOnly && !it.isOpenGym) return false;
       if (filters.types.size > 0 && !filters.types.has(it.type)) return false;
       if (filters.province && it.province !== filters.province) return false;
       const d = dayKey(it.startsAt);
