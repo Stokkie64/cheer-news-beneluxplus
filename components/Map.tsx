@@ -111,15 +111,6 @@ const MAP_THEME_CSS = `
     font-weight: 500;
     font-size: 11px;
   }
-  /* Selected pin's permanent label gets the accent treatment. */
-  .cheer-tooltip--selected.leaflet-tooltip {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #ffffff;
-  }
-  .cheer-tooltip--selected .cheer-tooltip-city {
-    color: rgba(255, 255, 255, 0.85);
-  }
   /* Neutralize Leaflet's directional tooltip arrow (we omit it for clarity). */
   .cheer-tooltip.leaflet-tooltip::before { display: none; }
 
@@ -384,13 +375,6 @@ function MapFocus({
 
     marker.setIcon(clubIsSelection ? icons.selected : icons.hover);
     marker.setZIndexOffset(1000);
-    marker.bindTooltip(pinTooltipHtml(club.name, club.city), {
-      permanent: true,
-      direction: "top",
-      offset: [0, -28],
-      opacity: 1,
-      className: `cheer-tooltip${clubIsSelection ? " cheer-tooltip--selected" : ""}`,
-    });
     prevClub.current = marker;
 
     const group = clusterRef.current;
@@ -400,17 +384,25 @@ function MapFocus({
 
     if (clubIsSelection) {
       // A CLICK travels to the pin: reveal it (zoom/spiderfy if buried), then
-      // pan and open its popup.
+      // pan and open its popup. No name-tag tooltip here — the popup already
+      // carries the club name, and the tooltip is reserved for hover.
       const reveal = () => {
-        marker.openTooltip();
         map.panTo([club.lat, club.lng], { animate: true });
         marker.openPopup();
       };
       if (buried && group) group.zoomToShowLayer(marker, reveal);
       else reveal();
     } else if (!buried) {
-      // HOVER only highlights — never moves the camera. A pin buried in a
-      // cluster stays put; its tooltip can't show until a click reveals it.
+      // HOVER shows the name-tag tooltip and highlights — never moves the
+      // camera. A pin buried in a cluster stays put; its tooltip can't show
+      // until a click reveals it.
+      marker.bindTooltip(pinTooltipHtml(club.name, club.city), {
+        permanent: true,
+        direction: "top",
+        offset: [0, -28],
+        opacity: 1,
+        className: "cheer-tooltip",
+      });
       marker.openTooltip();
     }
   }, [clubFocus, clubIsSelection, clubs, icons, map, clusterRef, markerRefs]);
