@@ -45,8 +45,7 @@ export function Filters({
     filters.types.size > 0 ||
     filters.province !== null ||
     filters.from !== null ||
-    filters.to !== null ||
-    filters.openGymsOnly;
+    filters.to !== null;
 
   function reset() {
     onChange({
@@ -54,7 +53,6 @@ export function Filters({
       province: null,
       from: null,
       to: null,
-      openGymsOnly: false,
     });
   }
 
@@ -113,7 +111,7 @@ export function Filters({
         })}
       </div>
 
-      {/* Row: city + date range + open-gym toggle */}
+      {/* Row: city + date range */}
       <div className="flex flex-wrap items-center gap-2">
         <select
           value={filters.province ?? ""}
@@ -153,37 +151,6 @@ export function Filters({
             className="h-8 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
           />
         </label>
-
-        <button
-          type="button"
-          role="switch"
-          aria-checked={filters.openGymsOnly}
-          onClick={() =>
-            onChange({ ...filters, openGymsOnly: !filters.openGymsOnly })
-          }
-          className={cn(
-            "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-            filters.openGymsOnly
-              ? "border-transparent bg-[var(--secondary)] text-white"
-              : "border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--surface-2)]",
-          )}
-        >
-          <span
-            aria-hidden
-            className={cn(
-              "relative h-3.5 w-6 rounded-full transition-colors",
-              filters.openGymsOnly ? "bg-white/40" : "bg-[var(--border)]",
-            )}
-          >
-            <span
-              className={cn(
-                "absolute top-0.5 size-2.5 rounded-full bg-white transition-transform",
-                filters.openGymsOnly ? "translate-x-2.5" : "translate-x-0.5",
-              )}
-            />
-          </span>
-          {t.filters.openGymsOnly}
-        </button>
       </div>
     </div>
   );

@@ -131,7 +131,6 @@ export const nl = {
     allProvinces: "Alle provincies",
     from: "Van",
     to: "Tot",
-    openGymsOnly: "Alleen open gyms",
   },
 
   // ---- Map: tooltips, popups, controls ----
@@ -586,7 +585,6 @@ export const en = {
     allProvinces: "All provinces",
     from: "From",
     to: "To",
-    openGymsOnly: "Open gyms only",
   },
 
   map: {
