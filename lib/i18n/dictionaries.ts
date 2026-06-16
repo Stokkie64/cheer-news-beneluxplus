@@ -380,15 +380,14 @@ export const nl = {
   about: {
     metaTitle: "Over Cheer News",
     metaDescription:
-      "Cheer News brengt alle cheerleading in Nederland samen op één plek. Een initiatief gebouwd voor Cheersport Netherlands (CSN), de nationale cheerleadingfederatie.",
+      "Cheer News brengt alle cheerleading in Nederland samen op één plek: clubs, wedstrijden, open gyms en trainingstijden op een kaart, agenda en clubgids.",
     eyebrow: "Over dit project",
     heading: "Alle cheerleading in Nederland, op één plek",
     introBefore:
-      "Cheer News is een open overzicht van de Nederlandse cheerleadingwereld: clubs, wedstrijden, open gyms en trainingstijden, samengebracht op een kaart, een agenda en een clubgids. Een initiatief gebouwd voor",
-    introCsn: "Cheersport Netherlands",
-    whatHeading: "Wat we bouwen",
+      "Cheer News is een open overzicht van de Nederlandse cheerleadingwereld: clubs, wedstrijden, open gyms en trainingstijden, samengebracht op een kaart, een agenda en een clubgids. Ik heb het gemaakt omdat al die informatie nu verspreid staat over losse clubsites, social media en federatie-agenda's — hier staat alles bij elkaar.",
+    whatHeading: "Wat ik bouw",
     whatBody:
-      "Informatie over cheerleading staat nu verspreid over losse clubsites, social media en federatie-agenda's. Wij brengen het samen. Data wordt grotendeels automatisch verzameld en aangevuld met meldingen uit de community. Elke onzekere of gemelde toevoeging wordt handmatig gecontroleerd voordat die online komt.",
+      "Informatie over cheerleading staat nu verspreid over losse clubsites, social media en federatie-agenda's. Ik breng het samen. Data wordt grotendeels automatisch verzameld en aangevuld met meldingen uit de community. Elke onzekere of gemelde toevoeging controleer ik handmatig voordat die online komt.",
     chipMap: "Kaart",
     chipAgenda: "Agenda",
     chipClubs: "Clubgids",
@@ -428,8 +427,6 @@ export const nl = {
     csnHeading: "Over Cheersport Netherlands",
     csnBody1:
       "Cheersport Netherlands (CSN) is de nationale cheerleadingfederatie van Nederland. CSN zet zich in om cheerleading in het hele land te laten groeien vanuit een visie van samenwerking, opleiding en inclusiviteit. Samen met coaches, sporters, scholen en clubs werkt de federatie aan een sterke cheerleadinggemeenschap. CSN is gevestigd in Maastricht.",
-    csnBody2:
-      "Cheer News is gebouwd in naam van CSN, als publiek venster op de Nederlandse cheerscene.",
     csnVisit: "Bezoek cheersport.nl",
     tcnlHeading: "Over Team Cheerleading Nederland",
     tcnlBody1:
@@ -815,15 +812,14 @@ export const en = {
   about: {
     metaTitle: "About Cheer News",
     metaDescription:
-      "Cheer News brings all cheerleading in the Netherlands together in one place. An initiative built for Cheersport Netherlands (CSN), the national cheerleading federation.",
+      "Cheer News brings all cheerleading in the Netherlands together in one place: clubs, competitions, open gyms and training times on a map, agenda and club directory.",
     eyebrow: "About this project",
     heading: "All cheerleading in the Netherlands, in one place",
     introBefore:
-      "Cheer News is an open overview of the Dutch cheerleading world: clubs, competitions, open gyms and training times, brought together on a map, an agenda and a club directory. An initiative built for",
-    introCsn: "Cheersport Netherlands",
-    whatHeading: "What we build",
+      "Cheer News is an open overview of the Dutch cheerleading world: clubs, competitions, open gyms and training times, brought together on a map, an agenda and a club directory. I built it because all that information is currently scattered across separate club sites, social media and federation calendars — here it lives in one place.",
+    whatHeading: "What I'm building",
     whatBody:
-      "Information about cheerleading is currently scattered across separate club sites, social media and federation calendars. We bring it together. Data is mostly collected automatically and supplemented with reports from the community. Every uncertain or reported addition is checked by hand before it goes live.",
+      "Information about cheerleading is currently scattered across separate club sites, social media and federation calendars. I bring it together. Data is mostly collected automatically and supplemented with reports from the community. Every uncertain or reported addition I check by hand before it goes live.",
     chipMap: "Map",
     chipAgenda: "Agenda",
     chipClubs: "Club directory",
@@ -863,8 +859,6 @@ export const en = {
     csnHeading: "About Cheersport Netherlands",
     csnBody1:
       "Cheersport Netherlands (CSN) is the national cheerleading federation of the Netherlands. CSN works to grow cheerleading across the country from a vision of collaboration, education and inclusivity. Together with coaches, athletes, schools and clubs, the federation builds a strong cheerleading community. CSN is based in Maastricht.",
-    csnBody2:
-      "Cheer News is built in the name of CSN, as a public window on the Dutch cheer scene.",
     csnVisit: "Visit cheersport.nl",
     tcnlHeading: "About Team Cheerleading Nederland",
     tcnlBody1:
