@@ -26,6 +26,28 @@ async function requireAdmin(req: Request): Promise<AdminUser | null> {
   return verifyAdmin(bearerToken(req.headers.get("authorization")));
 }
 
+/**
+ * Append an immutable record of a state-changing admin action to `auditLog`.
+ * Best-effort: a logging failure must never fail the action itself, so this
+ * swallows its own errors. The collection is server-only (Firestore rules deny
+ * all client access); apply a TTL policy on `at` to cap retention.
+ */
+async function writeAuditLog(entry: {
+  action: "approve" | "reject";
+  kind: "submission" | "event";
+  targetId: string;
+  reviewer: string;
+}): Promise<void> {
+  try {
+    await adminDb.collection("auditLog").add({
+      ...entry,
+      at: FieldValue.serverTimestamp(),
+    });
+  } catch (err) {
+    console.error("[api/admin/review] audit log write failed:", err);
+  }
+}
+
 export async function GET(req: Request) {
   const admin = await requireAdmin(req);
   if (!admin) {
@@ -128,7 +150,7 @@ export async function POST(req: Request) {
 
   try {
     if (kind === "event") {
-      return await reviewEvent(id, action);
+      return await reviewEvent(id, action, admin.email);
     }
     return await reviewSubmission(id, action, admin.email);
   } catch (err) {
@@ -141,7 +163,11 @@ export async function POST(req: Request) {
 }
 
 /** A pending scraped event: publish it or reject it. */
-async function reviewEvent(id: string, action: "approve" | "reject") {
+async function reviewEvent(
+  id: string,
+  action: "approve" | "reject",
+  reviewer: string,
+) {
   const ref = adminDb.collection(COLLECTIONS.events).doc(id);
   const snap = await ref.get();
   if (!snap.exists) {
@@ -154,6 +180,7 @@ async function reviewEvent(id: string, action: "approve" | "reject") {
     status: action === "approve" ? "published" : "rejected",
     updatedAt: FieldValue.serverTimestamp(),
   });
+  await writeAuditLog({ action, kind: "event", targetId: id, reviewer });
   return NextResponse.json({ ok: true });
 }
 
@@ -174,6 +201,7 @@ async function reviewSubmission(
 
   if (action === "reject") {
     await ref.update({ status: "rejected", reviewedBy: reviewer });
+    await writeAuditLog({ action, kind: "submission", targetId: id, reviewer });
     return NextResponse.json({ ok: true });
   }
 
@@ -189,6 +217,7 @@ async function reviewSubmission(
     reviewedBy: reviewer,
     createdEntityId: createdEntityId ?? null,
   });
+  await writeAuditLog({ action, kind: "submission", targetId: id, reviewer });
   return NextResponse.json({ ok: true, createdEntityId });
 }
 
