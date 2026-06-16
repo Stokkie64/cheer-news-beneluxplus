@@ -1,24 +1,48 @@
 import { Badge } from "@/components/ui/Badge";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { cn } from "@/lib/utils";
-import type { Level, Team, TeamSummary } from "@/lib/types";
+import type { DanceStyle, Team, TeamSummary } from "@/lib/types";
 
-/** Stable display order for levels (numeric tiers first, then named tiers). */
-const LEVEL_ORDER: Level[] = [
-  "1",
-  "2",
-  "3",
-  "4",
-  "5",
-  "6",
-  "elite",
-  "prep",
-  "recreational",
+type TeamLike = TeamSummary | Team;
+
+/** Stable display order for performance-cheer dance styles. */
+const DANCE_ORDER: DanceStyle[] = [
+  "pom",
+  "pom_doubles",
+  "hip_hop",
+  "hip_hop_doubles",
+  "jazz",
+  "kick",
 ];
 
-function sortLevels(levels: Iterable<Level>): Level[] {
-  const present = new Set(levels);
-  return LEVEL_ORDER.filter((l) => present.has(l));
+/**
+ * Resolve a team to a single classification token. A team's headline label is no
+ * longer always its level: performance-cheer teams show their dance style, cheer
+ * teams show their numeric level (rendered as the ICU word, e.g. "Median (L3)"),
+ * and cheer teams with no level (prep/recreational) show their tier. Returns null
+ * when there's nothing meaningful to show. `sort` orders cheer levels 1→7 first,
+ * then prep/recreational, then performance-cheer styles.
+ */
+function classifyTeam(
+  tm: TeamLike,
+  t: Dictionary,
+): { sort: number; label: string } | null {
+  const discipline = tm.discipline ?? "cheer";
+  if (discipline === "performance_cheer") {
+    const style = tm.danceStyle ?? null;
+    const idx = style ? DANCE_ORDER.indexOf(style) : -1;
+    return {
+      sort: 300 + (idx < 0 ? DANCE_ORDER.length : idx),
+      label: style ? t.danceStyle[style] : t.discipline.performance_cheer,
+    };
+  }
+  if (tm.level != null) {
+    return { sort: Number(tm.level), label: t.level[tm.level] };
+  }
+  const tier = tm.tier ?? "competition";
+  if (tier === "prep") return { sort: 200, label: t.tier.prep };
+  if (tier === "recreational") return { sort: 201, label: t.tier.recreational };
+  return null; // cheer + competition with no level: data anomaly, nothing to show
 }
 
 interface TeamBadgesProps {
@@ -27,8 +51,8 @@ interface TeamBadgesProps {
   /** Active dictionary for the taxonomy labels + empty text. */
   t: Dictionary;
   /**
-   * "levels" (default): one badge per distinct level — compact, for cards.
-   * "full": one badge per distinct level+division+age combination.
+   * "levels" (default): one badge per distinct classification token — compact,
+   * for cards. "full": one badge per distinct token+division+age combination.
    */
   variant?: "levels" | "full";
   /** Cap the number of badges; remainder collapses into a "+N" pill. */
@@ -38,7 +62,7 @@ interface TeamBadgesProps {
 
 /**
  * Renders a club's offerings as compact badges. Dedupes across teams so a club
- * with many same-level teams shows one badge per distinct value.
+ * with many same-classification teams shows one badge per distinct value.
  */
 export function TeamBadges({
   teams,
@@ -55,7 +79,7 @@ export function TeamBadges({
 
   const labels =
     variant === "levels"
-      ? sortLevels(teams.map((tm) => tm.level)).map((l) => t.level[l])
+      ? dedupeTokenLabels(teams, t)
       : dedupeFullLabels(teams, t);
 
   const shown = max != null ? labels.slice(0, max) : labels;
@@ -73,24 +97,33 @@ export function TeamBadges({
   );
 }
 
-/** Distinct "Level · Division · Age" combinations, in a sensible order. */
-function dedupeFullLabels(teams: TeamSummary[] | Team[], t: Dictionary): string[] {
-  const seen = new Map<string, { level: Level; label: string }>();
+/** Distinct classification tokens (level / style / tier), in sorted order. */
+function dedupeTokenLabels(teams: TeamLike[], t: Dictionary): string[] {
+  const seen = new Map<string, number>(); // label -> sort weight
   for (const tm of teams) {
-    const key = `${tm.level}|${tm.division}|${tm.ageGroup}`;
+    const tok = classifyTeam(tm, t);
+    if (!tok || seen.has(tok.label)) continue;
+    seen.set(tok.label, tok.sort);
+  }
+  return [...seen.entries()]
+    .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))
+    .map(([label]) => label);
+}
+
+/** Distinct "Token · Division · Age" combinations, in a sensible order. */
+function dedupeFullLabels(teams: TeamLike[], t: Dictionary): string[] {
+  const seen = new Map<string, { sort: number; label: string }>();
+  for (const tm of teams) {
+    const tok = classifyTeam(tm, t);
+    if (!tok) continue;
+    const key = `${tok.label}|${tm.division}|${tm.ageGroup}`;
     if (seen.has(key)) continue;
     seen.set(key, {
-      level: tm.level,
-      label: `${t.level[tm.level]} · ${t.division[tm.division]} · ${t.ageGroup[tm.ageGroup]}`,
+      sort: tok.sort,
+      label: `${tok.label} · ${t.division[tm.division]} · ${t.ageGroup[tm.ageGroup]}`,
     });
   }
-  const order = sortLevels([...seen.values()].map((v) => v.level));
-  const orderIndex = new Map(order.map((l, i) => [l, i]));
   return [...seen.values()]
-    .sort(
-      (a, b) =>
-        (orderIndex.get(a.level) ?? 0) - (orderIndex.get(b.level) ?? 0) ||
-        a.label.localeCompare(b.label),
-    )
+    .sort((a, b) => a.sort - b.sort || a.label.localeCompare(b.label))
     .map((v) => v.label);
 }

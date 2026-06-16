@@ -14,16 +14,31 @@
 
 export type ClubType = "club" | "student" | "school" | "select_team";
 export type PrimaryChannel = "website" | "facebook" | "instagram" | "none";
-export type Level =
-  | "1"
-  | "2"
-  | "3"
-  | "4"
-  | "5"
-  | "6"
-  | "elite"
-  | "prep"
-  | "recreational";
+
+/**
+ * Team classification has two independent axes, kept in separate fields:
+ *
+ *  - `Discipline` — WHAT kind of sport. `cheer` (stunts/tumbling, scored on a
+ *    numeric skill ladder) vs `performance_cheer` (pom/dance, scored by style,
+ *    with NO numeric level).
+ *  - `CheerLevel` — HOW HARD the cheer is. The numeric L-code ladder. We store
+ *    the number (canonical, sortable) and render the ICU word-name as a label
+ *    (3 = Median, 4 = Advanced, 5 = Elite, 6/7 = Premier — see lib/i18n). The
+ *    Dutch federation (CSN) runs the NK on the ICU/ECU rulebook, so the L-code
+ *    is the authoritative spine here. `null` for performance-cheer teams.
+ *  - `Tier` — HOW COMPETITIVE (orthogonal to level). `prep`/`recreational` used
+ *    to live in the level enum but were never skill levels.
+ */
+export type Discipline = "cheer" | "performance_cheer";
+export type CheerLevel = "1" | "2" | "3" | "4" | "5" | "6" | "7";
+export type DanceStyle =
+  | "pom"
+  | "hip_hop"
+  | "jazz"
+  | "kick"
+  | "pom_doubles"
+  | "hip_hop_doubles";
+export type Tier = "competition" | "prep" | "recreational";
 export type Division = "all_girl" | "coed" | "all_boy";
 export type AgeGroup = "mini" | "youth" | "junior" | "senior" | "open";
 export type EventType =
@@ -63,7 +78,12 @@ export interface GeoPoint {
 export interface Team {
   id: string;
   name: string;
-  level: Level;
+  discipline: Discipline;
+  /** Numeric L-code; `null` for performance-cheer teams (style describes them). */
+  level: CheerLevel | null;
+  /** Set only when `discipline === "performance_cheer"`. */
+  danceStyle?: DanceStyle | null;
+  tier: Tier;
   division: Division;
   ageGroup: AgeGroup;
   notes?: string;
@@ -72,7 +92,10 @@ export interface Team {
 
 /** Compact team descriptor denormalized onto the club doc for fast guide rendering. */
 export interface TeamSummary {
-  level: Level;
+  discipline: Discipline;
+  level: CheerLevel | null;
+  danceStyle?: DanceStyle | null;
+  tier: Tier;
   division: Division;
   ageGroup: AgeGroup;
 }
