@@ -685,6 +685,14 @@ export default function Map({
     () => (
       <MarkerClusterGroup
         ref={setClusterGroup}
+        // Clicking a cluster spiderfies it IN PLACE (no zoom change) and the
+        // spider stays open, so its members can be clicked (popup) or hovered
+        // (name tag). `zoomToBoundsOnClick={false}` stops the old zoom-to-bounds;
+        // `spiderfyOnEveryZoom` makes the fan-out happen at any zoom, not just
+        // max zoom. This is only safe because the cluster subtree is memoized —
+        // an open spider used to collapse on the next hover-driven rebuild.
+        zoomToBoundsOnClick={false}
+        spiderfyOnEveryZoom
         spiderfyOnMaxZoom
         showCoverageOnHover={false}
         spiderfyDistanceMultiplier={1.6}
@@ -759,9 +767,9 @@ export default function Map({
         <ResetViewControl onSelect={onSelect} t={t} />
         <ResetView signal={resetSignal} />
 
-        {/* Pins merge into the accent count badge. Clicking a cluster ZOOMS to
-            its bounds (library default) so members become individual pins;
-            genuinely coincident pins spiderfy at max zoom. The subtree is
+        {/* Pins merge into the accent count badge. Clicking a cluster spiderfies
+            it in place (no zoom) and the spider stays open for clicking/hovering
+            its members — see the MarkerClusterGroup config. The subtree is
             memoized (see `clusterGroup`) so hover/selection never rebuilds it —
             that rebuild is what used to collapse an open spider. Highlighting and
             reveal are done imperatively by <MapFocus> above. */}
