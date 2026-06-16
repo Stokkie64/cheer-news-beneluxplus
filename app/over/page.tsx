@@ -19,6 +19,7 @@ import {
   BookOpen,
   Layers,
   UserPlus,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { getDictionary } from "@/lib/i18n/server";
@@ -59,6 +60,12 @@ export default async function AboutPage() {
       title: t.about.roadmap.sourcesTitle,
       body: t.about.roadmap.sourcesBody,
       when: t.about.roadmap.sourcesWhen,
+    },
+    {
+      icon: Sparkles,
+      title: t.about.roadmap.rulesAiTitle,
+      body: t.about.roadmap.rulesAiBody,
+      when: t.about.roadmap.rulesAiWhen,
     },
     {
       icon: Layers,
@@ -162,6 +169,26 @@ export default async function AboutPage() {
               rel="noopener noreferrer"
             >
               {t.about.csnVisit}
+              <ArrowUpRight className="size-4" aria-hidden />
+            </a>
+          </Button>
+        </div>
+      </section>
+
+      {/* About TCNL */}
+      <section className="mb-12 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[var(--shadow-sm)]">
+        <h2 className="font-display text-xl font-bold tracking-tight">
+          {t.about.tcnlHeading}
+        </h2>
+        <p className="mt-3 text-[var(--muted)]">{t.about.tcnlBody1}</p>
+        <div className="mt-5">
+          <Button asChild variant="secondary" size="sm">
+            <a
+              href="https://www.teamcheerleading.nl/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {t.about.tcnlVisit}
               <ArrowUpRight className="size-4" aria-hidden />
             </a>
           </Button>

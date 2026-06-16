@@ -412,6 +412,10 @@ export const nl = {
       sourcesBody:
         "Eén plek voor de officiële regels: rulebooks, scoresheets en richtlijnen van de federatie, gebundeld en altijd vindbaar.",
       sourcesWhen: "Later",
+      rulesAiTitle: "Regels-assistent",
+      rulesAiBody:
+        "Een Google NotebookLM gevuld met de officiële cheerleadingreglementen, zodat je gewoon een vraag kunt stellen — “mag deze stunt in level 3?” — en meteen antwoord krijgt, met verwijzing naar de bron.",
+      rulesAiWhen: "Later",
       teamClassTitle: "Betere teamindeling",
       teamClassBody:
         "Een duidelijker classificatie van teams op niveau, divisie en leeftijdsgroep, zodat je clubs en wedstrijden preciezer kunt filteren en vergelijken.",
@@ -427,6 +431,10 @@ export const nl = {
     csnBody2:
       "Cheer News is gebouwd in naam van CSN, als publiek venster op de Nederlandse cheerscene.",
     csnVisit: "Bezoek cheersport.nl",
+    tcnlHeading: "Over Team Cheerleading Nederland",
+    tcnlBody1:
+      "Stichting Team Cheerleading Nederland (TCNL) is de organisatie achter de Nederlandse nationale teams — de Dutch Equipe — die ons land vertegenwoordigen op internationale wedstrijden zoals de ICU World Cheerleading Championships. Aangesteld door Cheersport Netherlands en volledig gedragen door vrijwilligers, regelt TCNL de landelijke trainingen, coaches, kleding, reizen en sponsoring rondom de nationale selectie. Team Cheer NL komt uit in de categorieën Coed, All Girl, Junior, Youth en Adaptive Abilities.",
+    tcnlVisit: "Bezoek teamcheerleading.nl",
     ctaHeading: "Mis je iets?",
     ctaBody:
       "De agenda groeit met de community. Ontbreekt er een club, wedstrijd of open gym? Laat het ons weten.",
@@ -839,6 +847,10 @@ export const en = {
       sourcesBody:
         "One place for the official rules: rulebooks, scoresheets and federation guidelines, bundled and always findable.",
       sourcesWhen: "Later",
+      rulesAiTitle: "Ask-the-rules assistant",
+      rulesAiBody:
+        "A Google NotebookLM loaded with the official cheerleading rulebooks, so you can simply ask a question — “is this stunt allowed in level 3?” — and get an answer, with a reference back to the source.",
+      rulesAiWhen: "Later",
       teamClassTitle: "Better team classification",
       teamClassBody:
         "A clearer classification of teams by level, division and age group, so you can filter and compare clubs and competitions more precisely.",
@@ -854,6 +866,10 @@ export const en = {
     csnBody2:
       "Cheer News is built in the name of CSN, as a public window on the Dutch cheer scene.",
     csnVisit: "Visit cheersport.nl",
+    tcnlHeading: "About Team Cheerleading Nederland",
+    tcnlBody1:
+      "Stichting Team Cheerleading Nederland (TCNL) is the organisation behind the national teams — the Dutch Equipe — that represent the country at international competitions such as the ICU World Cheerleading Championships. Appointed by Cheersport Netherlands and run entirely by volunteers, TCNL handles the nationwide training, coaching, apparel, travel and sponsorship around the national squad. Team Cheer NL competes in the Coed, All Girl, Junior, Youth and Adaptive Abilities categories.",
+    tcnlVisit: "Visit teamcheerleading.nl",
     ctaHeading: "Missing something?",
     ctaBody:
       "The agenda grows with the community. Missing a club, competition or open gym? Let us know.",
