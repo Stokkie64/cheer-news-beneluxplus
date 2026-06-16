@@ -344,7 +344,6 @@ function MapFocus({
   selectedClubId,
   hoveredClubId,
   selectedVenueId,
-  hoveredVenueId,
   clubs,
   venues,
   clusterRef,
@@ -355,7 +354,6 @@ function MapFocus({
   selectedClubId: string | null;
   hoveredClubId: string | null;
   selectedVenueId: string | null;
-  hoveredVenueId: string | null;
   clubs: MapClub[];
   venues: MapVenue[];
   clusterRef: React.RefObject<L.MarkerClusterGroup | null>;
@@ -416,17 +414,19 @@ function MapFocus({
   }, [clubFocus, clubIsSelection, clubs, icons, map, clusterRef, markerRefs]);
 
   // --- Venues (club-independent open gyms) ---
-  const venueFocus = selectedVenueId ?? hoveredVenueId;
-  const venueIsSelection = selectedVenueId != null;
+  // Unlike clubs, a venue reveals ONLY on a click (selection), never on hover —
+  // hovering a gym row should not move the camera, just highlight the row (the
+  // Calendar handles that via `venueFocusId`). So this keys on `selectedVenueId`
+  // alone and ignores the hover channel.
   useEffect(() => {
     if (prevVenue.current) {
       prevVenue.current.setZIndexOffset(0);
       prevVenue.current.closePopup();
       prevVenue.current = null;
     }
-    if (!venueFocus) return;
-    const venue = venues.find((v) => v.id === venueFocus);
-    const marker = venueRefs.current.get(venueFocus);
+    if (!selectedVenueId) return;
+    const venue = venues.find((v) => v.id === selectedVenueId);
+    const marker = venueRefs.current.get(selectedVenueId);
     if (!venue || !marker) return;
 
     marker.setZIndexOffset(1000);
@@ -434,21 +434,19 @@ function MapFocus({
 
     const group = clusterRef.current;
     const reveal = () => {
-      if (venueIsSelection) {
-        map.panTo([venue.lat, venue.lng], { animate: true });
-        marker.openPopup();
-      }
+      map.panTo([venue.lat, venue.lng], { animate: true });
+      marker.openPopup();
     };
     if (
       group &&
       group.hasLayer(marker) &&
       group.getVisibleParent(marker) !== marker
     ) {
-      group.zoomToShowLayer(marker, reveal);
+      group.zoomToShowLayer(marker, reveal); // buried → spider open, then popup
     } else {
       reveal();
     }
-  }, [venueFocus, venueIsSelection, venues, map, clusterRef, venueRefs]);
+  }, [selectedVenueId, venues, map, clusterRef, venueRefs]);
 
   return null;
 }
@@ -612,7 +610,6 @@ export default function Map({
   selectedClubId,
   onHover,
   onSelect,
-  hoveredVenueId = null,
   selectedVenueId = null,
   onHoverVenue,
   onSelectVenue,
@@ -774,7 +771,6 @@ export default function Map({
           selectedClubId={selectedClubId}
           hoveredClubId={hoveredClubId}
           selectedVenueId={selectedVenueId}
-          hoveredVenueId={hoveredVenueId}
           clubs={clubs}
           venues={venues}
           clusterRef={clusterRef}

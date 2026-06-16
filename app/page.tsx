@@ -123,7 +123,9 @@ export default async function Home() {
       return occurrences.map((occ, i) => ({
         id: `gym:${gym.id}:${i}`,
         clubId: gym.clubId,
-        venueId: gym.clubId ? null : (gym.venueId ?? gym.id),
+        // Must match the MapVenue id below (`venue:${vid}`) so clicking this row
+        // can find and reveal the venue's pin — same prefix on both sides.
+        venueId: gym.clubId ? null : `venue:${gym.venueId ?? gym.id}`,
         title: venueName
           ? `Open gym · ${venueName}`
           : t.eventType.open_gym,
