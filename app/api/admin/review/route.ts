@@ -9,7 +9,7 @@
  * Any failure → 401.
  */
 import { NextResponse } from "next/server";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { bearerToken, verifyAdmin, type AdminUser } from "@/lib/auth";
 import {
@@ -26,11 +26,18 @@ async function requireAdmin(req: Request): Promise<AdminUser | null> {
   return verifyAdmin(bearerToken(req.headers.get("authorization")));
 }
 
+/** Audit entries auto-delete one year after they're written (see expireAt). */
+const AUDIT_RETENTION_MS = 365 * 24 * 60 * 60 * 1000;
+
 /**
  * Append an immutable record of a state-changing admin action to `auditLog`.
  * Best-effort: a logging failure must never fail the action itself, so this
  * swallows its own errors. The collection is server-only (Firestore rules deny
- * all client access); apply a TTL policy on `at` to cap retention.
+ * all client access).
+ *
+ * `expireAt` is the retention deadline; a Firestore TTL policy configured on
+ * the `expireAt` field deletes the doc once that time passes. (TTL must point
+ * at a future timestamp — never at `at`, which is already in the past.)
  */
 async function writeAuditLog(entry: {
   action: "approve" | "reject";
@@ -42,6 +49,7 @@ async function writeAuditLog(entry: {
     await adminDb.collection("auditLog").add({
       ...entry,
       at: FieldValue.serverTimestamp(),
+      expireAt: Timestamp.fromMillis(Date.now() + AUDIT_RETENTION_MS),
     });
   } catch (err) {
     console.error("[api/admin/review] audit log write failed:", err);
