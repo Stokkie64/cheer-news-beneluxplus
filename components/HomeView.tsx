@@ -19,13 +19,14 @@
  * The map is dynamically imported with `{ ssr: false }` because Leaflet needs
  * `window`.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { Map as MapIcon, CalendarDays, Loader2 } from "lucide-react";
 import { Calendar } from "@/components/Calendar";
 import { Filters } from "@/components/Filters";
 import { RESET_HOME_EVENT } from "@/components/HomeNavLink";
 import { EmptyState } from "@/components/home/EmptyState";
+import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 import { dayKey } from "@/lib/dateFormat";
 import type {
@@ -70,6 +71,7 @@ export function HomeView({
   coaches: MapCoach[];
   items: CalendarItem[];
 }) {
+  const { t } = useI18n();
   const [filters, setFilters] = useState<HomeFilters>(EMPTY_FILTERS);
   const [hoveredClubId, setHoveredClubId] = useState<string | null>(null);
   const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
@@ -78,6 +80,15 @@ export function HomeView({
   // reveals a single pin on the map (matched by id in <Map>). Independent of the
   // club-keyed highlight above, since an event is its own location, not a club's.
   const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
+  // Sticky pick of a club-less item with its own pin (e.g. an event at a venue).
+  // Clicking such a row zooms the map to its pin and keeps it shown. Mutually
+  // exclusive with `selectedClubId` — selecting one clears the other.
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  // Club-independent open-gym venues live INSIDE the map cluster (like clubs),
+  // so they get their own hover/select channel: hovering/clicking a venue open-
+  // gym row reveals (spiders open) and highlights its buried pin via <MapFocus>.
+  const [hoveredVenueId, setHoveredVenueId] = useState<string | null>(null);
+  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
   const [tab, setTab] = useState<"map" | "calendar">("map");
   // Bumped to tell <Map> to recenter on the whole country.
   const [resetSignal, setResetSignal] = useState(0);
@@ -89,6 +100,9 @@ export function HomeView({
       setSelectedClubId(null);
       setHoveredClubId(null);
       setHoveredItemId(null);
+      setSelectedItemId(null);
+      setHoveredVenueId(null);
+      setSelectedVenueId(null);
       setFilters((f) => ({ ...f, province: null }));
       setResetSignal((n) => n + 1);
     }
@@ -153,10 +167,39 @@ export function HomeView({
   // comes from a currently-visible (filtered) agenda row — so reveal is
   // inherently consistent with the active filters, no Set membership needed.
 
-  // Toggle selection off when clicking the already-selected club.
-  function handleSelect(id: string | null) {
+  // Ids of agenda items that have their OWN map pin (located events + coaches),
+  // so the Calendar knows which club-less rows are clickable-to-zoom.
+  const pinnableItemIds = useMemo(
+    () => new Set<string>([...events.map((e) => e.id), ...coaches.map((c) => c.id)]),
+    [events, coaches],
+  );
+
+  // Toggle selection off when clicking the already-selected club. Only one
+  // sticky pick at a time, so selecting a club clears any item/venue selection.
+  // `useCallback` keeps these referentially stable — the Map memoizes its whole
+  // cluster subtree on these callbacks, and a new identity each render would
+  // rebuild the cluster and collapse any open spider.
+  const handleSelect = useCallback((id: string | null) => {
     setSelectedClubId((prev) => (prev === id ? null : id));
-  }
+    setSelectedItemId(null);
+    setSelectedVenueId(null);
+  }, []);
+
+  // Select a club-less item (its own pin) → the map zooms to it. Toggles off on
+  // re-click, and clears any club/venue selection.
+  const handleSelectItem = useCallback((id: string | null) => {
+    setSelectedItemId((prev) => (prev === id ? null : id));
+    setSelectedClubId(null);
+    setSelectedVenueId(null);
+  }, []);
+
+  // Select a club-independent open-gym venue → <MapFocus> spiders its cluster
+  // open and opens its popup. Toggles off on re-click; clears club/item picks.
+  const handleSelectVenue = useCallback((id: string | null) => {
+    setSelectedVenueId((prev) => (prev === id ? null : id));
+    setSelectedClubId(null);
+    setSelectedItemId(null);
+  }, []);
 
   const hasClubs = clubs.length > 0;
   const hasVenues = venues.length > 0;
@@ -171,18 +214,23 @@ export function HomeView({
         venues={filteredVenues}
         events={events}
         coaches={filteredCoaches}
-        activeEventId={hoveredItemId}
+        hoveredEventId={hoveredItemId}
+        selectedEventId={selectedItemId}
         hoveredClubId={hoveredClubId}
         selectedClubId={selectedClubId}
         onHover={setHoveredClubId}
         onSelect={handleSelect}
+        hoveredVenueId={hoveredVenueId}
+        selectedVenueId={selectedVenueId}
+        onHoverVenue={setHoveredVenueId}
+        onSelectVenue={handleSelectVenue}
         resetSignal={resetSignal}
       />
     ) : (
       <EmptyState
         icon={MapIcon}
-        title="Nog geen clubs op de kaart"
-        hint="Zodra clubs met een locatie zijn toegevoegd, verschijnen ze hier als pins."
+        title={t.home.emptyMap.title}
+        hint={t.home.emptyMap.hint}
       />
     );
 
@@ -203,14 +251,21 @@ export function HomeView({
           onHover={setHoveredClubId}
           onSelect={handleSelect}
           onHoverItem={setHoveredItemId}
+          selectedItemId={selectedItemId}
+          onSelectItem={handleSelectItem}
+          pinnableItemIds={pinnableItemIds}
+          hoveredVenueId={hoveredVenueId}
+          selectedVenueId={selectedVenueId}
+          onHoverVenue={setHoveredVenueId}
+          onSelectVenue={handleSelectVenue}
         />
       </div>
     </div>
   ) : (
     <EmptyState
       icon={CalendarDays}
-      title="Nog geen evenementen"
-      hint="Wedstrijden, open gyms en workshops verschijnen hier zodra ze bekend zijn."
+      title={t.home.emptyAgenda.title}
+      hint={t.home.emptyAgenda.hint}
     />
   );
 
@@ -224,13 +279,13 @@ export function HomeView({
           active={tab === "map"}
           onClick={() => setTab("map")}
           icon={<MapIcon className="size-4" aria-hidden />}
-          label="Kaart"
+          label={t.home.mobileTab.map}
         />
         <TabButton
           active={tab === "calendar"}
           onClick={() => setTab("calendar")}
           icon={<CalendarDays className="size-4" aria-hidden />}
-          label="Agenda"
+          label={t.home.mobileTab.agenda}
         />
       </div>
 
@@ -243,7 +298,7 @@ export function HomeView({
             "h-[calc(100dvh-3.5rem-3rem)] md:h-[calc(100dvh-3.5rem)]",
             tab === "map" ? "block" : "hidden md:block",
           )}
-          aria-label="Kaart van cheerleadingclubs"
+          aria-label={t.home.mapAriaLabel}
         >
           {mapPanel}
         </section>
@@ -255,7 +310,7 @@ export function HomeView({
             "h-[calc(100dvh-3.5rem-3rem)] md:h-[calc(100dvh-3.5rem)]",
             tab === "calendar" ? "block" : "hidden md:block",
           )}
-          aria-label="Agenda van evenementen"
+          aria-label={t.home.agendaAriaLabel}
         >
           {calendarPanel}
         </section>

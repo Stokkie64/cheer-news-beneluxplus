@@ -1,30 +1,34 @@
 import { DoorOpen, MapPin } from "lucide-react";
 import { EmptyState } from "@/components/home/EmptyState";
 import { weeklySlots } from "@/lib/recurrence";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 import type { OpenGymClient } from "@/lib/types";
-
-/** Lowercased Dutch weekday for the "Elke <dag>" phrasing. */
-function elke(weekday: string): string {
-  return `Elke ${weekday.toLowerCase()}`;
-}
 
 interface OpenGymRow {
   key: string;
   weekdayIndex: number;
-  label: string; // e.g. "Elke zaterdag 15:00–17:00"
+  label: string; // e.g. "Elke zaterdag 15:00–17:00" / "Every saturday 15:00–17:00"
   locationText: string | null;
   notes: string | null;
 }
 
 /** Public open gyms rendered as their recurring WEEKLY pattern (not dated). */
-export function OpenGymsList({ openGyms }: { openGyms: OpenGymClient[] }) {
+export function OpenGymsList({
+  openGyms,
+  t,
+}: {
+  openGyms: OpenGymClient[];
+  t: Dictionary;
+}) {
   const rows: OpenGymRow[] = [];
   for (const gym of openGyms) {
     for (const slot of weeklySlots(gym)) {
+      // Localize the weekday via its index (slot.weekday is NL by construction).
+      const weekday = t.weekdays[slot.weekdayIndex] ?? slot.weekday;
       rows.push({
         key: `${gym.id}:${slot.weekdayIndex}:${slot.startTime}`,
         weekdayIndex: slot.weekdayIndex,
-        label: `${elke(slot.weekday)} ${slot.startTime}–${slot.endTime}`,
+        label: `${t.club.every(weekday)} ${slot.startTime}–${slot.endTime}`,
         locationText: gym.locationText,
         notes: gym.notes,
       });
@@ -38,8 +42,8 @@ export function OpenGymsList({ openGyms }: { openGyms: OpenGymClient[] }) {
     return (
       <EmptyState
         icon={DoorOpen}
-        title="Nog geen open gyms bekend"
-        hint="Terugkerende open-gym tijden verschijnen hier zodra ze bekend zijn."
+        title={t.club.emptyOpenGymsTitle}
+        hint={t.club.emptyOpenGymsHint}
       />
     );
   }

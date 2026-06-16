@@ -6,9 +6,21 @@
  * the date/time strings shown per row — all Dutch, all Amsterdam-day based.
  */
 import { formatInTimeZone } from "date-fns-tz";
-import { nl } from "date-fns/locale";
-import { TZ, dayKey } from "@/lib/dateFormat";
+import { TZ, dateFnsLocale, dayKey } from "@/lib/dateFormat";
+import type { Locale } from "@/lib/i18n/config";
 import type { CalendarItem } from "@/components/home/types";
+
+/**
+ * The agenda label strings this module needs, supplied by the caller from the
+ * active dictionary (`t.agenda`). Keeps these pure helpers free of any i18n
+ * import while still rendering in the chosen language.
+ */
+export interface AgendaLabels {
+  today: string;
+  tomorrow: string;
+  allDay: string;
+  until: string;
+}
 
 /** A single agenda row. May represent one item or several condensed occurrences. */
 export interface AgendaRow {
@@ -33,29 +45,38 @@ export interface AgendaGroup {
 
 /** "19:30" — Amsterdam wall-clock time. */
 function timeFmt(iso: string): string {
-  return formatInTimeZone(new Date(iso), TZ, "HH:mm", { locale: nl });
+  return formatInTimeZone(new Date(iso), TZ, "HH:mm");
 }
 
-/** "16 jun" — day + short month (used for multi-day ranges). */
-function dayMonthFmt(iso: string): string {
-  return formatInTimeZone(new Date(iso), TZ, "d MMM", { locale: nl });
+/** "16 jun" / "16 Jun" — day + short month (used for multi-day ranges). */
+function dayMonthFmt(iso: string, locale: Locale): string {
+  return formatInTimeZone(new Date(iso), TZ, "d MMM", {
+    locale: dateFnsLocale(locale),
+  });
 }
 
-/** "ma 16 jun" — short weekday + day + month. */
-function headerFmt(dKey: string): string {
+/** "ma 16 jun" / "Mon 16 Jun" — short weekday + day + month. */
+function headerFmt(dKey: string, locale: Locale): string {
   // dKey is a yyyy-MM-dd Amsterdam day; anchor to noon UTC so the calendar day
   // is unambiguous regardless of the Amsterdam offset.
-  return formatInTimeZone(`${dKey}T12:00:00Z`, TZ, "eee d MMM", { locale: nl });
+  return formatInTimeZone(`${dKey}T12:00:00Z`, TZ, "eee d MMM", {
+    locale: dateFnsLocale(locale),
+  });
 }
 
 /** Header label for a day key relative to `today` (also a yyyy-MM-dd key). */
-export function headerLabel(dKey: string, todayKey: string): string {
-  if (dKey === todayKey) return "Vandaag";
+export function headerLabel(
+  dKey: string,
+  todayKey: string,
+  labels: AgendaLabels,
+  locale: Locale,
+): string {
+  if (dKey === todayKey) return labels.today;
   // Tomorrow.
   const tomorrow = new Date(`${todayKey}T12:00:00Z`);
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-  if (dKey === dayKey(tomorrow)) return "Morgen";
-  return headerFmt(dKey);
+  if (dKey === dayKey(tomorrow)) return labels.tomorrow;
+  return headerFmt(dKey, locale);
 }
 
 /**
@@ -66,15 +87,19 @@ export function headerLabel(dKey: string, todayKey: string): string {
  *  - timed with end on same day     → "19:30 – 21:00"
  *  - timed spanning days            → "16 jun 19:30 – 17 jun 02:00"
  */
-export function timeLabel(item: CalendarItem): string {
+export function timeLabel(
+  item: CalendarItem,
+  labels: AgendaLabels,
+  locale: Locale,
+): string {
   const startDay = dayKey(item.startsAt);
   const endDay = item.endsAt ? dayKey(item.endsAt) : startDay;
 
   if (item.allDay) {
     if (item.endsAt && endDay > startDay) {
-      return `${dayMonthFmt(item.startsAt)} – ${dayMonthFmt(item.endsAt)}`;
+      return `${dayMonthFmt(item.startsAt, locale)} – ${dayMonthFmt(item.endsAt, locale)}`;
     }
-    return "Hele dag";
+    return labels.allDay;
   }
 
   const startTime = timeFmt(item.startsAt);
@@ -82,8 +107,9 @@ export function timeLabel(item: CalendarItem): string {
 
   if (endDay > startDay) {
     // Spans midnight / multiple days — qualify both ends with their date.
-    return `${dayMonthFmt(item.startsAt)} ${startTime} – ${dayMonthFmt(
+    return `${dayMonthFmt(item.startsAt, locale)} ${startTime} – ${dayMonthFmt(
       item.endsAt,
+      locale,
     )} ${timeFmt(item.endsAt)}`;
   }
   return `${startTime} – ${timeFmt(item.endsAt)}`;
@@ -118,13 +144,18 @@ function spannedDayKeys(item: CalendarItem): string[] {
  * first day, "tot HH:mm" on the last, and "Hele dag" for full days in between
  * (or any all-day event).
  */
-function timeLabelForDay(item: CalendarItem, dKey: string, span: string[]): string {
-  if (item.allDay) return "Hele dag";
+function timeLabelForDay(
+  item: CalendarItem,
+  dKey: string,
+  span: string[],
+  labels: AgendaLabels,
+): string {
+  if (item.allDay) return labels.allDay;
   if (dKey === span[0]) return timeFmt(item.startsAt);
   if (dKey === span[span.length - 1] && item.endsAt) {
-    return `tot ${timeFmt(item.endsAt)}`;
+    return `${labels.until} ${timeFmt(item.endsAt)}`;
   }
-  return "Hele dag";
+  return labels.allDay;
 }
 
 /**
@@ -140,7 +171,12 @@ function timeLabelForDay(item: CalendarItem, dKey: string, span: string[]): stri
  * Items are assumed sorted by `startsAt` ascending (page.tsx sorts them); we
  * sort defensively anyway so the component never depends on caller order.
  */
-export function buildAgenda(items: CalendarItem[], now: Date): AgendaGroup[] {
+export function buildAgenda(
+  items: CalendarItem[],
+  now: Date,
+  labels: AgendaLabels,
+  locale: Locale,
+): AgendaGroup[] {
   const sorted = [...items].sort((a, b) =>
     a.startsAt.localeCompare(b.startsAt),
   );
@@ -153,7 +189,11 @@ export function buildAgenda(items: CalendarItem[], now: Date): AgendaGroup[] {
   const groupFor = (dKey: string): AgendaGroup => {
     let group = groups.get(dKey);
     if (!group) {
-      group = { dayKey: dKey, label: headerLabel(dKey, todayKey), rows: [] };
+      group = {
+        dayKey: dKey,
+        label: headerLabel(dKey, todayKey, labels, locale),
+        rows: [],
+      };
       groups.set(dKey, group);
     }
     return group;
@@ -176,7 +216,7 @@ export function buildAgenda(items: CalendarItem[], now: Date): AgendaGroup[] {
         key: item.id,
         item,
         count: 1,
-        timeLabel: timeLabel(item),
+        timeLabel: timeLabel(item, labels, locale),
       };
       gymMerge.set(mergeKey, row);
       groupFor(startDayKey).rows.push(row);
@@ -193,7 +233,9 @@ export function buildAgenda(items: CalendarItem[], now: Date): AgendaGroup[] {
         item,
         count: 1,
         timeLabel:
-          span.length > 1 ? timeLabelForDay(item, dKey, span) : timeLabel(item),
+          span.length > 1
+            ? timeLabelForDay(item, dKey, span, labels)
+            : timeLabel(item, labels, locale),
       });
     }
   }

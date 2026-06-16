@@ -2,24 +2,27 @@ import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { AdminNavLink } from "@/components/AdminNavLink";
 import { HomeNavLink } from "@/components/HomeNavLink";
+import { LanguageToggle } from "@/components/LanguageToggle";
+import { getDictionary } from "@/lib/i18n/server";
 
 const NAV_LINK_CLASS =
   "rounded-full px-3 py-1.5 font-medium text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]";
 
-const NAV = [
-  { href: "/", label: "Kaart & agenda" },
-  { href: "/clubs", label: "Clubs" },
-  { href: "/coaches", label: "Coaches" },
-  { href: "/over", label: "Over" },
-];
+export async function SiteHeader() {
+  const t = await getDictionary();
+  const nav = [
+    { href: "/", label: t.header.nav.home },
+    { href: "/clubs", label: t.header.nav.clubs },
+    { href: "/coaches", label: t.header.nav.coaches },
+    { href: "/over", label: t.header.nav.about },
+  ];
 
-export function SiteHeader() {
   return (
     <header className="sticky top-0 z-[1000] border-b border-[var(--border)] bg-[var(--surface)]/90 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-7xl items-center gap-6 px-4">
+      <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-4">
         <Link
           href="/"
-          className="flex items-center gap-2 font-display text-lg font-extrabold tracking-tight"
+          className="flex shrink-0 items-center gap-2 font-display text-lg font-extrabold tracking-tight"
         >
           <span
             className="inline-block size-3 rounded-sm bg-[var(--accent)]"
@@ -28,7 +31,7 @@ export function SiteHeader() {
           Cheer<span className="text-[var(--accent)]">News</span>
         </Link>
         <nav className="flex items-center gap-1 text-sm">
-          {NAV.map((item) =>
+          {nav.map((item) =>
             item.href === "/" ? (
               <HomeNavLink
                 key={item.href}
@@ -42,11 +45,12 @@ export function SiteHeader() {
               </Link>
             ),
           )}
-          <AdminNavLink />
+          <AdminNavLink label={t.header.nav.admin} />
         </nav>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <LanguageToggle />
           <Button asChild size="sm">
-            <Link href="/submit">Ontbrekend item melden</Link>
+            <Link href="/submit">{t.header.submitCta}</Link>
           </Button>
         </div>
       </div>

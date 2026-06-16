@@ -7,7 +7,7 @@
  * for a dataset that is mostly sparse one-offs plus many recurring open gyms.
  * Instead we render a tight, scannable list grouped by date ("Vandaag",
  * "Morgen", "ma 16 jun"). Each row shows, at a glance and with no clicking:
- *   - a type color dot + NL type label (EVENT_TYPE_LABEL / EVENT_TYPE_COLOR)
+ *   - a type color dot + localized type label (t.eventType / EVENT_TYPE_COLOR)
  *   - the time / duration (or "Hele dag", or a multi-day range)
  *   - the title
  *   - the club name
@@ -31,7 +31,9 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Clock, MapPin, CalendarDays, ArrowRight, ExternalLink } from "lucide-react";
-import { EVENT_TYPE_COLOR, EVENT_TYPE_LABEL } from "@/lib/eventColors";
+import { EVENT_TYPE_COLOR } from "@/lib/eventColors";
+import { useI18n } from "@/lib/i18n/context";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { cn } from "@/lib/utils";
 import type { CalendarItem } from "@/components/home/types";
 import { buildAgenda, type AgendaRow } from "@/components/home/agenda";
@@ -48,6 +50,30 @@ interface CalendarProps {
    * (events have no persistent pin). Independent of the club-keyed `onHover`.
    */
   onHoverItem?: (id: string | null) => void;
+  /**
+   * Selecting a club-less item (its own pin, e.g. an event at a venue). Clicking
+   * such a row zooms the map to that pin — the item-level analogue of `onSelect`,
+   * which only handles club-owned rows. `selectedItemId` reflects the current
+   * sticky pick so the row renders focused.
+   */
+  selectedItemId?: string | null;
+  onSelectItem?: (id: string | null) => void;
+  /**
+   * Ids of items that have their own map pin (located events/coaches). Only
+   * these club-less rows are made clickable — a row with no pin can't be zoomed
+   * to, so it stays non-interactive.
+   */
+  pinnableItemIds?: Set<string>;
+  /**
+   * Venue channel for club-independent open-gym rows (`item.venueId`). Mirrors
+   * the club channel: hovering/clicking such a row reveals + highlights the
+   * venue's pin on the map (which lives inside the cluster, like a club's). All
+   * rows sharing a venue light up together, just like a club's rows do.
+   */
+  hoveredVenueId?: string | null;
+  selectedVenueId?: string | null;
+  onHoverVenue?: (id: string | null) => void;
+  onSelectVenue?: (id: string | null) => void;
   /** clubId → display name, for the club line (events may not embed it). */
   clubNames?: Record<string, string>;
 }
@@ -57,8 +83,8 @@ interface CalendarProps {
  * since we render the type label and club name separately, strip that prefix to
  * a plain "Open gym" so the title column isn't redundant.
  */
-function displayTitle(item: CalendarItem): string {
-  if (item.isOpenGym) return EVENT_TYPE_LABEL.open_gym;
+function displayTitle(item: CalendarItem, t: Dictionary): string {
+  if (item.isOpenGym) return t.eventType.open_gym;
   return item.title;
 }
 
@@ -69,16 +95,40 @@ export function Calendar({
   onHover,
   onSelect,
   onHoverItem,
+  selectedItemId,
+  onSelectItem,
+  pinnableItemIds,
+  hoveredVenueId,
+  selectedVenueId,
+  onHoverVenue,
+  onSelectVenue,
   clubNames,
 }: CalendarProps) {
+  const { t, locale } = useI18n();
   // Single "now" per mount so "Vandaag"/"Morgen" headers are stable across
   // renders. A lazy useState initializer runs exactly once on mount and is a
   // legitimate render-time value (unlike reading a ref during render).
   const [now] = useState(() => new Date());
 
-  const groups = useMemo(() => buildAgenda(items, now), [items, now]);
+  const groups = useMemo(
+    () =>
+      buildAgenda(
+        items,
+        now,
+        {
+          today: t.agenda.today,
+          tomorrow: t.agenda.tomorrow,
+          allDay: t.agenda.allDay,
+          until: t.agenda.until,
+        },
+        locale,
+      ),
+    [items, now, t, locale],
+  );
 
   const focusId = selectedClubId ?? hoveredClubId;
+  // Venue analogue of `focusId`: a selected venue wins over a hovered one.
+  const venueFocusId = selectedVenueId ?? hoveredVenueId ?? null;
 
   if (groups.length === 0) {
     return (
@@ -87,10 +137,10 @@ export function Calendar({
           <CalendarDays className="size-5" aria-hidden />
         </span>
         <p className="font-display text-sm font-semibold text-[var(--ink)]">
-          Geen evenementen
+          {t.agenda.emptyTitle}
         </p>
         <p className="max-w-xs text-xs text-[var(--muted)]">
-          Geen evenementen in deze periode of met deze filters.
+          {t.agenda.emptyHint}
         </p>
       </div>
     );
@@ -117,9 +167,16 @@ export function Calendar({
                   row={row}
                   focusId={focusId}
                   clubNames={clubNames}
+                  t={t}
                   onHover={onHover}
                   onSelect={onSelect}
                   onHoverItem={onHoverItem}
+                  selectedItemId={selectedItemId}
+                  onSelectItem={onSelectItem}
+                  pinnable={pinnableItemIds?.has(row.item.id) ?? false}
+                  venueFocusId={venueFocusId}
+                  onHoverVenue={onHoverVenue}
+                  onSelectVenue={onSelectVenue}
                 />
               ))}
             </ul>
@@ -131,45 +188,76 @@ export function Calendar({
 }
 
 /** Button label for the "go to page" link, tailored to where the url points. */
-function linkLabel(url: string): string {
-  if (url.startsWith("/clubs/")) return "Bekijk club";
-  if (url.startsWith("/coaches")) return "Bekijk coach";
-  if (url.startsWith("/")) return "Meer info";
-  return "Website";
+function linkLabel(url: string, t: Dictionary): string {
+  if (url.startsWith("/clubs/")) return t.agenda.viewClub;
+  if (url.startsWith("/coaches")) return t.agenda.viewCoach;
+  if (url.startsWith("/")) return t.agenda.moreInfo;
+  return t.agenda.website;
 }
 
 function AgendaRowItem({
   row,
   focusId,
   clubNames,
+  t,
   onHover,
   onSelect,
   onHoverItem,
+  selectedItemId,
+  onSelectItem,
+  pinnable,
+  venueFocusId,
+  onHoverVenue,
+  onSelectVenue,
 }: {
   row: AgendaRow;
   focusId: string | null;
   clubNames?: Record<string, string>;
+  t: Dictionary;
   onHover: (id: string | null) => void;
   onSelect: (id: string | null) => void;
   onHoverItem?: (id: string | null) => void;
+  selectedItemId?: string | null;
+  onSelectItem?: (id: string | null) => void;
+  /** This item has its own map pin (club-less located event/coach). */
+  pinnable?: boolean;
+  /** The venue currently focused (selected ?? hovered), for venue open-gym rows. */
+  venueFocusId?: string | null;
+  onHoverVenue?: (id: string | null) => void;
+  onSelectVenue?: (id: string | null) => void;
 }) {
   const { item } = row;
   const color = EVENT_TYPE_COLOR[item.type];
   // Highlight is keyed by club: focusing a club (via a pin or any of its agenda
   // rows) highlights EVERY row that belongs to it — so all of a club's open-gym
-  // occurrences light up together, not just the hovered/clicked one.
-  const dimmed = focusId != null && item.clubId !== focusId;
-  const focused = focusId != null && item.clubId === focusId;
+  // occurrences light up together, not just the hovered/clicked one. A club-less
+  // pin row is its own thing, so it highlights only when it's the selected item.
+  // A club focus dims rows of other clubs; a venue focus dims rows of other
+  // venues. (Club and venue focus are mutually exclusive — at most one is set.)
+  const dimmed =
+    (focusId != null && item.clubId !== focusId) ||
+    (venueFocusId != null && item.venueId !== venueFocusId);
+  const focused =
+    (focusId != null && item.clubId === focusId) ||
+    (venueFocusId != null && item.venueId === venueFocusId) ||
+    (selectedItemId != null && selectedItemId === item.id);
 
   const clubName =
     (item.clubId && clubNames?.[item.clubId]) ||
     (item.isOpenGym ? clubNameFromTitle(item.title) : null);
 
-  // The row body selects the event's club → the map zooms to its location. The
-  // trailing link (if the item has a url) is the ONLY thing that navigates away,
-  // to the club/coach/event page. Splitting them lets a click reveal the pin
-  // without leaving the page, and keeps the <a> out of the <button> (invalid).
-  const canFocus = Boolean(item.clubId);
+  // The row body focuses the item on the map → it zooms in. Club-owned rows
+  // focus the club (onSelect); a club-less row with its own pin focuses that pin
+  // (onSelectItem). The trailing link (if the item has a url) is the ONLY thing
+  // that navigates away; splitting them lets a click reveal the pin without
+  // leaving the page, and keeps the <a> out of the <button> (invalid).
+  const canFocus =
+    Boolean(item.clubId) || Boolean(item.venueId) || Boolean(pinnable);
+  const focusItem = () => {
+    if (item.clubId) onSelect(item.clubId);
+    else if (item.venueId) onSelectVenue?.(item.venueId);
+    else onSelectItem?.(item.id);
+  };
   const linkHref = item.url;
   const linkIsInternal = linkHref?.startsWith("/") ?? false;
 
@@ -193,7 +281,7 @@ function AgendaRowItem({
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span className="truncate text-sm font-semibold text-[var(--ink)]">
-            {displayTitle(item)}
+            {displayTitle(item, t)}
           </span>
           {row.count > 1 && (
             <span className="shrink-0 rounded-full bg-[var(--surface-2)] px-1.5 text-[0.65rem] font-semibold tabular-nums text-[var(--muted)]">
@@ -203,7 +291,7 @@ function AgendaRowItem({
         </div>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--muted)]">
           <span className="font-medium" style={{ color }}>
-            {EVENT_TYPE_LABEL[item.type]}
+            {t.eventType[item.type]}
           </span>
           {clubName && (
             <>
@@ -253,10 +341,14 @@ function AgendaRowItem({
     <li
       onMouseEnter={() => {
         onHover(item.clubId);
-        onHoverItem?.(item.id);
+        // A venue open-gym row drives the venue channel; any other club-less row
+        // (located event/coach) drives the item channel. Club rows do neither.
+        if (item.venueId) onHoverVenue?.(item.venueId);
+        else onHoverItem?.(item.id);
       }}
       onMouseLeave={() => {
         onHover(null);
+        onHoverVenue?.(null);
         onHoverItem?.(null);
       }}
       className={rowClass}
@@ -264,8 +356,8 @@ function AgendaRowItem({
       {canFocus ? (
         <button
           type="button"
-          onClick={() => onSelect(item.clubId)}
-          aria-label={`${displayTitle(item)} — toon locatie op de kaart`}
+          onClick={focusItem}
+          aria-label={t.agenda.showOnMap(displayTitle(item, t))}
           className={bodyClass}
         >
           {content}
@@ -279,9 +371,12 @@ function AgendaRowItem({
           <Link
             href={linkHref}
             className={linkClass}
-            aria-label={`${displayTitle(item)} — ${linkLabel(linkHref)}`}
+            aria-label={t.agenda.rowLink(
+              displayTitle(item, t),
+              linkLabel(linkHref, t),
+            )}
           >
-            {linkLabel(linkHref)}
+            {linkLabel(linkHref, t)}
             <ArrowRight className="size-3.5" aria-hidden />
           </Link>
         ) : (
@@ -290,9 +385,12 @@ function AgendaRowItem({
             target="_blank"
             rel="noopener noreferrer"
             className={linkClass}
-            aria-label={`${displayTitle(item)} — ${linkLabel(linkHref)} (externe link)`}
+            aria-label={t.agenda.rowLink(
+              displayTitle(item, t),
+              t.agenda.externalSuffix(linkLabel(linkHref, t)),
+            )}
           >
-            {linkLabel(linkHref)}
+            {linkLabel(linkHref, t)}
             <ExternalLink className="size-3.5" aria-hidden />
           </a>
         ))}

@@ -9,16 +9,20 @@ import type { Metadata } from "next";
 import { getClubs } from "@/lib/queries";
 import type { ClubClient } from "@/lib/types";
 import { ClubGrid } from "@/components/ClubGrid";
+import { getDictionary } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Clubgids",
-  description:
-    "Alle cheerleadingclubs in Nederland: zoek op naam of plaats en filter op niveau, divisie en leeftijdscategorie.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getDictionary();
+  return {
+    title: t.clubs.metaTitle,
+    description: t.clubs.metaDescription,
+  };
+}
 
 export default async function ClubsPage() {
+  const t = await getDictionary();
   let clubs: ClubClient[] = [];
   try {
     clubs = await getClubs();
@@ -31,12 +35,9 @@ export default async function ClubsPage() {
     <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:py-10">
       <header className="mb-6 max-w-2xl">
         <h1 className="font-display text-3xl font-extrabold tracking-tight text-[var(--ink)] sm:text-4xl">
-          Clubgids
+          {t.clubs.heading}
         </h1>
-        <p className="mt-2 text-[var(--muted)]">
-          Vind cheerleadingclubs in heel Nederland. Zoek op naam of plaats en
-          filter op niveau, divisie en leeftijdscategorie.
-        </p>
+        <p className="mt-2 text-[var(--muted)]">{t.clubs.intro}</p>
       </header>
 
       <ClubGrid clubs={clubs} />

@@ -1,18 +1,28 @@
 import { CalendarDays, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/home/EmptyState";
-import { EVENT_TYPE_COLOR, EVENT_TYPE_LABEL } from "@/lib/eventColors";
-import { formatNlDateTimeRange } from "@/components/clubs/dateFormat";
+import { EVENT_TYPE_COLOR } from "@/lib/eventColors";
+import { formatDateTimeRange } from "@/components/clubs/dateFormat";
+import type { Locale } from "@/lib/i18n/config";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 import type { EventClient } from "@/lib/types";
 
-/** Upcoming one-off events for a club, NL-formatted in Amsterdam time. */
-export function EventsList({ events }: { events: EventClient[] }) {
+/** Upcoming one-off events for a club, formatted in Amsterdam time. */
+export function EventsList({
+  events,
+  t,
+  locale,
+}: {
+  events: EventClient[];
+  t: Dictionary;
+  locale: Locale;
+}) {
   if (events.length === 0) {
     return (
       <EmptyState
         icon={CalendarDays}
-        title="Nog geen evenementen bekend"
-        hint="Aankomende wedstrijden en workshops verschijnen hier zodra ze bekend zijn."
+        title={t.club.emptyEventsTitle}
+        hint={t.club.emptyEventsHint}
       />
     );
   }
@@ -25,11 +35,11 @@ export function EventsList({ events }: { events: EventClient[] }) {
             <div className="flex items-start justify-between gap-3">
               <p className="font-medium text-[var(--ink)]">{e.title}</p>
               <Badge color={EVENT_TYPE_COLOR[e.type]} className="shrink-0">
-                {EVENT_TYPE_LABEL[e.type]}
+                {t.eventType[e.type]}
               </Badge>
             </div>
             <p className="mt-1 text-sm text-[var(--muted)]">
-              {formatNlDateTimeRange(e.startsAt, e.endsAt)}
+              {formatDateTimeRange(e.startsAt, e.endsAt, locale)}
             </p>
             {e.locationText && (
               <p className="mt-0.5 flex items-center gap-1 text-sm text-[var(--muted)]">

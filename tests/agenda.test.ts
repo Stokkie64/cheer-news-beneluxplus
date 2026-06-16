@@ -1,6 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { buildAgenda } from "@/components/home/agenda";
+import { buildAgenda, type AgendaLabels } from "@/components/home/agenda";
+import { nl } from "@/lib/i18n/dictionaries";
 import type { CalendarItem } from "@/components/home/types";
+
+/** NL agenda labels, matching the assertions below ("Hele dag", "tot …"). */
+const NL_LABELS: AgendaLabels = {
+  today: nl.agenda.today,
+  tomorrow: nl.agenda.tomorrow,
+  allDay: nl.agenda.allDay,
+  until: nl.agenda.until,
+};
 
 /** Build a minimal open-gym CalendarItem for a given day + owner. */
 function gym(
@@ -33,7 +42,7 @@ describe("buildAgenda venue merging", () => {
       gym("a", "2026-06-15T19:00:00+02:00", { venueId: "v1" }),
       gym("b", "2026-06-15T20:00:00+02:00", { venueId: "v1" }),
     ];
-    const groups = buildAgenda(items, NOW);
+    const groups = buildAgenda(items, NOW, NL_LABELS, "nl");
     expect(groups).toHaveLength(1);
     expect(groups[0].rows).toHaveLength(1);
     expect(groups[0].rows[0].count).toBe(2);
@@ -44,7 +53,7 @@ describe("buildAgenda venue merging", () => {
       gym("a", "2026-06-15T19:00:00+02:00", { venueId: "v1" }),
       gym("b", "2026-06-15T19:00:00+02:00", { venueId: "v2" }),
     ];
-    const groups = buildAgenda(items, NOW);
+    const groups = buildAgenda(items, NOW, NL_LABELS, "nl");
     expect(groups[0].rows).toHaveLength(2);
   });
 
@@ -53,7 +62,7 @@ describe("buildAgenda venue merging", () => {
       gym("a", "2026-06-15T19:00:00+02:00", { clubId: "c1" }),
       gym("b", "2026-06-15T19:00:00+02:00", { venueId: "v1" }),
     ];
-    const groups = buildAgenda(items, NOW);
+    const groups = buildAgenda(items, NOW, NL_LABELS, "nl");
     expect(groups[0].rows).toHaveLength(2);
   });
 });
@@ -87,7 +96,7 @@ describe("buildAgenda multi-day events", () => {
     const items = [
       event("skills", "2026-08-01T00:00:00+02:00", "2026-08-02T23:59:00+02:00", true),
     ];
-    const groups = buildAgenda(items, NOW);
+    const groups = buildAgenda(items, NOW, NL_LABELS, "nl");
     expect(groups.map((g) => g.dayKey)).toEqual(["2026-08-01", "2026-08-02"]);
     expect(groups[0].rows).toHaveLength(1);
     expect(groups[1].rows).toHaveLength(1);
@@ -102,7 +111,7 @@ describe("buildAgenda multi-day events", () => {
     const items = [
       event("one", "2026-08-01T19:00:00+02:00", "2026-08-01T21:00:00+02:00"),
     ];
-    const groups = buildAgenda(items, NOW);
+    const groups = buildAgenda(items, NOW, NL_LABELS, "nl");
     expect(groups).toHaveLength(1);
     expect(groups[0].rows).toHaveLength(1);
     expect(groups[0].rows[0].key).toBe("one");
@@ -113,7 +122,7 @@ describe("buildAgenda multi-day events", () => {
     const items = [
       event("camp", "2026-08-01T10:00:00+02:00", "2026-08-02T16:00:00+02:00"),
     ];
-    const groups = buildAgenda(items, NOW);
+    const groups = buildAgenda(items, NOW, NL_LABELS, "nl");
     expect(groups).toHaveLength(2);
     expect(groups[0].rows[0].timeLabel).toBe("10:00");
     expect(groups[1].rows[0].timeLabel).toBe("tot 16:00");
