@@ -6,22 +6,20 @@ import { ClubCard } from "@/components/ClubCard";
 import { EmptyState } from "@/components/home/EmptyState";
 import { Users } from "lucide-react";
 import { useI18n } from "@/lib/i18n/context";
-import type { AgeGroup, ClubClient, Division, Level } from "@/lib/types";
+import type { AgeGroup, CheerLevel, ClubClient, Division } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const LEVEL_OPTIONS: Level[] = [
-  "1",
-  "2",
-  "3",
-  "4",
-  "5",
-  "6",
-  "elite",
-  "prep",
-  "recreational",
-];
+const LEVEL_OPTIONS: CheerLevel[] = ["1", "2", "3", "4", "5", "6", "7"];
 const DIVISION_OPTIONS: Division[] = ["all_girl", "coed", "all_boy"];
 const AGE_OPTIONS: AgeGroup[] = ["mini", "youth", "junior", "senior", "open"];
+
+/**
+ * Second classification axis (orthogonal to numeric level): performance-cheer
+ * discipline + the non-leveled tiers. Lets pom/prep/recreational teams — which
+ * carry no numeric level — stay filterable.
+ */
+type TeamType = "performance_cheer" | "prep" | "recreational";
+const TYPE_OPTIONS: TeamType[] = ["performance_cheer", "prep", "recreational"];
 
 interface ClubGridProps {
   clubs: ClubClient[];
@@ -35,7 +33,8 @@ interface ClubGridProps {
 export function ClubGrid({ clubs }: ClubGridProps) {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
-  const [level, setLevel] = useState<Level | "">("");
+  const [level, setLevel] = useState<CheerLevel | "">("");
+  const [type, setType] = useState<TeamType | "">("");
   const [division, setDivision] = useState<Division | "">("");
   const [age, setAge] = useState<AgeGroup | "">("");
   const [province, setProvince] = useState("");
@@ -61,16 +60,26 @@ export function ClubGrid({ clubs }: ClubGridProps) {
       if (province && c.region !== province) return false;
       const summary = c.teamsSummary ?? [];
       if (level && !summary.some((t) => t.level === level)) return false;
+      if (
+        type &&
+        !summary.some((t) =>
+          type === "performance_cheer"
+            ? (t.discipline ?? "cheer") === "performance_cheer"
+            : (t.tier ?? "competition") === type,
+        )
+      )
+        return false;
       if (division && !summary.some((t) => t.division === division))
         return false;
       if (age && !summary.some((t) => t.ageGroup === age)) return false;
       return true;
     });
-  }, [clubs, query, province, level, division, age]);
+  }, [clubs, query, province, level, type, division, age]);
 
   const hasActive =
     query !== "" ||
     level !== "" ||
+    type !== "" ||
     division !== "" ||
     age !== "" ||
     province !== "";
@@ -78,6 +87,7 @@ export function ClubGrid({ clubs }: ClubGridProps) {
   function reset() {
     setQuery("");
     setLevel("");
+    setType("");
     setDivision("");
     setAge("");
     setProvince("");
@@ -111,8 +121,19 @@ export function ClubGrid({ clubs }: ClubGridProps) {
         <FilterSelect
           label={t.clubs.level}
           value={level}
-          onChange={(v) => setLevel(v as Level | "")}
+          onChange={(v) => setLevel(v as CheerLevel | "")}
           options={LEVEL_OPTIONS.map((l) => [l, t.level[l]])}
+        />
+        <FilterSelect
+          label={t.clubs.type}
+          value={type}
+          onChange={(v) => setType(v as TeamType | "")}
+          options={TYPE_OPTIONS.map((v) => [
+            v,
+            v === "performance_cheer"
+              ? t.discipline.performance_cheer
+              : t.tier[v],
+          ])}
         />
         <FilterSelect
           label={t.clubs.division}
