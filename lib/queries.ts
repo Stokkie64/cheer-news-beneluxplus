@@ -73,7 +73,12 @@ export function teamsToSummary(teams: Team[]): TeamSummary[] {
   return teams
     .filter((t) => t.status === "active")
     .map((t) => ({
-      level: t.level,
+      // Defaults guard legacy docs written before these fields existed
+      // (docToClient does no runtime check — see its note).
+      discipline: t.discipline ?? "cheer",
+      level: t.level ?? null,
+      danceStyle: t.danceStyle ?? null,
+      tier: t.tier ?? "competition",
       division: t.division,
       ageGroup: t.ageGroup,
     }));

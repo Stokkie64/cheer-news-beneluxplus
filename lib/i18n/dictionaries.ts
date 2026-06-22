@@ -60,16 +60,32 @@ export const nl = {
   } satisfies Record<EventType, string>,
 
   // ---- Team taxonomy labels ----
+  // Numeric L-code keys; labels show the ICU word-name (CSN/NK convention).
   level: {
-    "1": "Level 1",
-    "2": "Level 2",
-    "3": "Level 3",
-    "4": "Level 4",
-    "5": "Level 5",
-    "6": "Level 6",
-    elite: "Elite",
+    "1": "Novice (L1)",
+    "2": "Intermediate (L2)",
+    "3": "Median (L3)",
+    "4": "Advanced (L4)",
+    "5": "Elite (L5)",
+    "6": "Premier (L6)",
+    "7": "Premier (L7)",
+  },
+  discipline: {
+    cheer: "Cheer",
+    performance_cheer: "Performance Cheer",
+  },
+  danceStyle: {
+    pom: "Pom",
+    hip_hop: "Hip Hop",
+    jazz: "Jazz",
+    kick: "Kick",
+    pom_doubles: "Pom Doubles",
+    hip_hop_doubles: "Hip Hop Doubles",
+  },
+  tier: {
+    competition: "Wedstrijd",
     prep: "Prep",
-    recreational: "Recreational",
+    recreational: "Recreatief",
   },
   division: {
     all_girl: "All Girl",
@@ -85,7 +101,15 @@ export const nl = {
   },
 
   // ---- Weekday names (for recurring slots) ----
-  weekdays: ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"],
+  weekdays: [
+    "Maandag",
+    "Dinsdag",
+    "Woensdag",
+    "Donderdag",
+    "Vrijdag",
+    "Zaterdag",
+    "Zondag",
+  ],
 
   // ---- Home: map + agenda split-view ----
   home: {
@@ -166,6 +190,7 @@ export const nl = {
     searchAria: "Zoek clubs",
     filter: "Filter",
     level: "Niveau",
+    type: "Type",
     division: "Divisie",
     age: "Leeftijd",
     province: "Provincie",
@@ -423,7 +448,11 @@ export const nl = {
       teamClassTitle: "Betere teamindeling",
       teamClassBody:
         "Een duidelijker classificatie van teams op niveau, divisie en leeftijdsgroep, zodat je clubs en wedstrijden preciezer kunt filteren en vergelijken.",
-      teamClassWhen: "Later",
+      teamClassWhen: "Geleverd",
+      coachesTitle: "Uitgebreidere coachespagina",
+      coachesBody:
+        "De bestaande coachespagina verder uitbouwen voor de coaches die al bij clubs trainen: rijkere profielen met specialisaties en bij welke club ze coachen, zodat je makkelijker de juiste coach vindt.",
+      coachesWhen: "Later",
       joinTitle: "“Ik wil meedoen”-knop",
       joinBody:
         "Een knop die nieuwe sporters naar de juiste club verwijst op basis van locatie en niveau, en helpt om meteen een proefles in te plannen.",
@@ -528,14 +557,30 @@ export const en = {
     other: "Other",
   },
 
+  // Numeric L-code keys; labels show the ICU word-name (CSN/NK convention).
   level: {
-    "1": "Level 1",
-    "2": "Level 2",
-    "3": "Level 3",
-    "4": "Level 4",
-    "5": "Level 5",
-    "6": "Level 6",
-    elite: "Elite",
+    "1": "Novice (L1)",
+    "2": "Intermediate (L2)",
+    "3": "Median (L3)",
+    "4": "Advanced (L4)",
+    "5": "Elite (L5)",
+    "6": "Premier (L6)",
+    "7": "Premier (L7)",
+  },
+  discipline: {
+    cheer: "Cheer",
+    performance_cheer: "Performance Cheer",
+  },
+  danceStyle: {
+    pom: "Pom",
+    hip_hop: "Hip Hop",
+    jazz: "Jazz",
+    kick: "Kick",
+    pom_doubles: "Pom Doubles",
+    hip_hop_doubles: "Hip Hop Doubles",
+  },
+  tier: {
+    competition: "Competition",
     prep: "Prep",
     recreational: "Recreational",
   },
@@ -552,7 +597,15 @@ export const en = {
     open: "Open",
   },
 
-  weekdays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+  weekdays: [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+  ],
 
   home: {
     mobileTab: { map: "Map", agenda: "Agenda" },
@@ -621,6 +674,7 @@ export const en = {
     searchAria: "Search clubs",
     filter: "Filter",
     level: "Level",
+    type: "Type",
     division: "Division",
     age: "Age",
     province: "Province",
@@ -738,7 +792,8 @@ export const en = {
         "e.g. Coach Jamie (tumbling) is in Utrecht 12–20 June, bookable via @handle or you@example.com.",
       correction:
         "e.g. The address of club X is wrong, or team Y no longer trains on Tuesdays.",
-      feedback: "Tell us what could be better, or what you noticed on the site.",
+      feedback:
+        "Tell us what could be better, or what you noticed on the site.",
     },
     kindUrl: {
       event: {
@@ -860,7 +915,11 @@ export const en = {
       teamClassTitle: "Better team classification",
       teamClassBody:
         "A clearer classification of teams by level, division and age group, so you can filter and compare clubs and competitions more precisely.",
-      teamClassWhen: "Later",
+      teamClassWhen: "Shipped",
+      coachesTitle: "Expanded coaches page",
+      coachesBody:
+        "Building out the existing coaches page for the coaches already training at clubs: richer profiles with specialisms and which club they coach at, so you can find the right coach more easily.",
+      coachesWhen: "Later",
       joinTitle: "“I want to join” button",
       joinBody:
         "A button that points new athletes to the right club by location and level, and helps schedule a trial class right away.",
