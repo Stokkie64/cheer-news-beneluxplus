@@ -17,7 +17,8 @@
     "aggregate": "tsx --env-file=.env.local scripts/aggregate.ts",
     "digest": "tsx --env-file=.env.local scripts/notify-digest.ts",
     "submissions": "tsx --env-file=.env.local scripts/list-submissions.ts",
-    "migrate:team-levels": "tsx --env-file=.env.local scripts/migrate-team-levels.ts"
+    "migrate:team-levels": "tsx --env-file=.env.local scripts/migrate-team-levels.ts",
+    "migrate:csn-member": "tsx --env-file=.env.local scripts/migrate-csn-member.ts"
   },
   "engines": {
     "node": ">=22"
